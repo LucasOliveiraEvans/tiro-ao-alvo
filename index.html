@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <title>AR Tiro ao Alvo</title>
-    <!-- Importando A-Frame e AR.js para acesso automático à câmera traseira -->
+    <!-- Importando A-Frame e AR.js -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
@@ -56,35 +56,81 @@
         return canvas.toDataURL();
       }
 
-      // Componente de acerto (Funciona com toque de dedo e clique)
+      // Função global para destruir o alvo ao ser atingido
+      function hitTarget(el) {
+        if (el.dataset.hit) return;
+        el.dataset.hit = "true";
+
+        score += 10;
+        const hud = document.getElementById('score-val');
+        if (hud) hud.innerText = score;
+        
+        // Animação de acerto
+        el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
+        setTimeout(() => {
+          if (el.parentNode) {
+            el.parentNode.removeChild(el);
+          }
+        }, 150);
+      }
+
+      // Componente do alvo
       AFRAME.registerComponent('shootable', {
         init: function () {
           const el = this.el;
-          
-          const destroyTarget = () => {
-            if (el.dataset.hit) return;
-            el.dataset.hit = "true";
-
-            score += 10;
-            const hud = document.getElementById('score-val');
-            if (hud) hud.innerText = score;
-            
-            // Animação de acerto
-            el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
-            setTimeout(() => {
-              if (el.parentNode) {
-                el.parentNode.removeChild(el);
-              }
-            }, 150);
-          };
-
-          // Registra o evento de toque/clique de forma universal
-          el.addEventListener('click', destroyTarget);
-          el.addEventListener('mousedown', destroyTarget);
+          el.addEventListener('click', () => hitTarget(el));
           el.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            destroyTarget();
+            hitTarget(el);
           });
+        }
+      });
+
+      // Gerenciador de cliques globais na tela para contornar a camada de vídeo da câmara
+      AFRAME.registerComponent('screen-tap-handler', {
+        init: function () {
+          const sceneEl = this.el;
+          
+          window.addEventListener('click', (evt) => {
+            this.checkIntersection(evt.clientX, evt.clientY, sceneEl);
+          });
+
+          window.addEventListener('touchend', (evt) => {
+            if (evt.changedTouches.length > 0) {
+              const touch = evt.changedTouches[0];
+              this.checkIntersection(touch.clientX, touch.clientY, sceneEl);
+            }
+          });
+        },
+
+        checkIntersection: function (clientX, clientY, sceneEl) {
+          const cameraEl = sceneEl.camera;
+          if (!cameraEl) return;
+
+          // Converte o toque da tela para coordenadas normalizadas (-1 a 1)
+          const mouse = new THREE.Vector2();
+          mouse.x = (clientX / window.innerWidth) * 2 - 1;
+          mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+          const raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera(mouse, cameraEl);
+
+          // Procura todos os alvos ativos na cena
+          const targetEls = document.querySelectorAll('.target');
+          const targetObjects = Array.from(targetEls).map(el => el.object3D);
+
+          const intersects = raycaster.intersectObjects(targetObjects, true);
+
+          if (intersects.length > 0) {
+            // Acha a entidade A-Frame correspondente ao objeto 3D atingido
+            let obj = intersects[0].object;
+            while (obj && !obj.el && obj.parent) {
+              obj = obj.parent;
+            }
+            if (obj && obj.el) {
+              hitTarget(obj.el);
+            }
+          }
         }
       });
 
@@ -94,7 +140,6 @@
           const sceneEl = this.el;
           this.targetTextureUrl = createTargetTexture();
 
-          // Inicia a geração a cada 2.5 segundos
           this.timer = setInterval(() => {
             const currentTargets = document.querySelectorAll('.target');
             if (currentTargets.length < 4) {
@@ -122,7 +167,7 @@
           targetDisc.setAttribute('height', '1.2');
           targetDisc.setAttribute('material', `src: url(${this.targetTextureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Posições polares 360° (distância entre 2m e 4m do usuário)
+          // Posições polares 360°
           const angle = Math.random() * Math.PI * 2;
           const distance = 2.0 + Math.random() * 2.0;
           
@@ -135,7 +180,6 @@
 
           sceneEl.appendChild(targetDisc);
 
-          // Orienta o alvo para a câmera
           setTimeout(() => {
             if (targetDisc.object3D && cameraEl && cameraEl.object3D) {
               const camPos = new THREE.Vector3();
@@ -144,7 +188,6 @@
             }
           }, 50);
 
-          // Expira após 6 segundos
           setTimeout(() => {
             if (targetDisc.parentNode) {
               targetDisc.parentNode.removeChild(targetDisc);
@@ -162,14 +205,12 @@
     <!-- Placar (HUD) -->
     <div id="hud">Pontos: <span id="score-val">0</span></div>
 
-    <!-- Cena com câmera ativada automaticamente via AR.js -->
-    <a-scene target-spawner embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
+    <!-- Cena com AR.js, spawner e manipulador global de toque na tela -->
+    <a-scene target-spawner screen-tap-handler embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
       
-      <!-- Câmera AR com sistema de clique por toque de tela -->
       <a-entity camera look-controls id="main-camera">
-        <a-entity cursor="rayOrigin: mouse; fuse: false"
-                  raycaster="objects: .target; interval: 50"
-                  position="0 0 -1"
+        <!-- Mira central opcional -->
+        <a-entity position="0 0 -1"
                   geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
                   material="color: white; shader: flat">
         </a-entity>
@@ -177,3 +218,5 @@
 
       <a-light type="ambient" color="#FFF"></a-light>
     </a-scene>
+  </body>
+</html>
