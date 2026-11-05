@@ -76,11 +76,21 @@
         box-shadow: 0 4px 15px rgba(0, 85, 255, 0.5);
       }
 
+      .btn-quit {
+        background-color: #444;
+        font-size: 14px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        margin: 0;
+        width: auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      }
+
       .btn:active {
         transform: scale(0.95);
       }
 
-      /* Placar e Cronômetro (HUD) */
+      /* Placar, Cronômetro e Botão de Sair (HUD) */
       #hud {
         position: absolute;
         top: 20px;
@@ -88,12 +98,13 @@
         right: 20px;
         display: flex;
         justify-content: space-between;
+        align-items: center;
         color: white;
-        font-size: 22px;
+        font-size: 20px;
         font-weight: bold;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
         z-index: 99999;
-        pointer-events: none;
+        pointer-events: auto;
         user-select: none;
         display: none;
       }
@@ -226,7 +237,6 @@
           };
 
           window.addEventListener('click', (evt) => {
-            // Previne disparo ao clicar nos botões da interface
             if (evt.target.tagName === 'BUTTON') return;
             handleTap(evt.clientX, evt.clientY);
           });
@@ -241,7 +251,7 @@
         }
       });
 
-      // Gerenciador de Alvos (Spawn em 360°, Distância e Tamanhos Variados)
+      // Gerenciador de Alvos (Spawn em 360°, Distância Aumentada)
       AFRAME.registerComponent('target-spawner', {
         init: function () {
           this.sceneEl = this.el;
@@ -288,12 +298,12 @@
 
           targetDisc.setAttribute('material', `src: url(${textureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Maior Distância (entre 3.5m e 6.0m do jogador)
+          // DISTÂNCIA AUMENTADA: Entre 6.0m e 10.0m do jogador (afastado da câmera)
           const angle = Math.random() * Math.PI * 2;
-          const distance = 3.5 + Math.random() * 2.5;
+          const distance = 6.0 + Math.random() * 4.0;
           
           const x = cameraPos.x + Math.cos(angle) * distance;
-          const y = cameraPos.y + (Math.random() - 0.5) * 2.0; // Variação de altura maior
+          const y = cameraPos.y + (Math.random() - 0.5) * 3.0; // Variação de altura
           const z = cameraPos.z + Math.sin(angle) * distance;
 
           targetDisc.setAttribute('position', `${x} ${y} ${z}`);
@@ -309,12 +319,12 @@
             }
           }, 50);
 
-          // Alvo expira após 5.5 segundos
+          // Alvo expira após 6 segundos
           setTimeout(() => {
             if (targetDisc.parentNode) {
               targetDisc.parentNode.removeChild(targetDisc);
             }
-          }, 5500);
+          }, 6000);
         },
 
         stop: function () {
@@ -398,7 +408,7 @@
         <p>
           Alvos Vermelhos = 10 pts<br>
           <b>Alvos Pretos & Azuis = 20 pts (Especial)</b><br><br>
-          Gire 360° para encontrar alvos em várias distâncias e tamanhos!
+          Gire 360° para encontrar alvos no ambiente!
         </p>
         <button class="btn" onclick="selectMode('arcade')">MODO ARCADE (30s)</button>
         <button class="btn btn-secondary" onclick="selectMode('livre')">MODO LIVRE (Treino)</button>
@@ -415,10 +425,11 @@
       </div>
     </div>
 
-    <!-- Interface HUD (Pontos e Tempo) -->
+    <!-- Interface HUD (Pontos, Tempo e Botão de Sair) -->
     <div id="hud">
       <div>Pontos: <span id="score-val">0</span></div>
       <div id="timer-container">Tempo: <span id="timer-val">30</span>s</div>
+      <button class="btn btn-quit" onclick="returnToMenu()">Sair / Menu</button>
     </div>
 
     <!-- Cena A-Frame + AR.js -->
