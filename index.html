@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>AR Tiro ao Alvo - Modo Arcade</title>
+    <title>AR Tiro ao Alvo - Modos de Jogo</title>
     <!-- Importando A-Frame e AR.js -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
@@ -13,7 +13,7 @@
         font-family: Arial, sans-serif;
       }
 
-      /* Tela de Menu Inicial e Fim de Jogo */
+      /* Telas de Menu e Fim de Jogo */
       .screen {
         position: fixed;
         top: 0;
@@ -28,25 +28,29 @@
         z-index: 999999;
         color: white;
         text-align: center;
+        padding: 20px;
+        box-sizing: border-box;
       }
 
       .screen h1 {
-        font-size: 32px;
+        font-size: 30px;
         margin-bottom: 10px;
         text-transform: uppercase;
         letter-spacing: 2px;
       }
 
       .screen p {
-        font-size: 16px;
-        margin-bottom: 30px;
+        font-size: 15px;
+        margin-bottom: 25px;
         color: #ccc;
-        max-width: 80%;
+        max-width: 90%;
       }
 
       .btn {
-        padding: 15px 40px;
-        font-size: 20px;
+        width: 100%;
+        max-width: 280px;
+        padding: 14px 20px;
+        font-size: 18px;
         font-weight: bold;
         color: white;
         background-color: #E50914;
@@ -54,12 +58,17 @@
         border-radius: 30px;
         cursor: pointer;
         box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+        margin-bottom: 15px;
         transition: transform 0.2s, background-color 0.2s;
+      }
+
+      .btn-secondary {
+        background-color: #333;
+        border: 2px solid #555;
       }
 
       .btn:active {
         transform: scale(0.95);
-        background-color: #b80710;
       }
 
       /* Placar e Cronômetro (HUD) */
@@ -77,7 +86,7 @@
         z-index: 99999;
         pointer-events: none;
         user-select: none;
-        display: none; /* Escondido até iniciar */
+        display: none;
       }
 
       #game-over-screen {
@@ -87,6 +96,7 @@
     <script>
       let score = 0;
       let timeLeft = 30;
+      let gameMode = 'arcade'; // 'arcade' ou 'livre'
       let gameStarted = false;
       let timerInterval = null;
 
@@ -127,11 +137,11 @@
         ctx.clearRect(0, 0, 512, 512);
 
         const rings = [
-          { r: 250, color: '#0055FF' }, // Azul vibrante
-          { r: 200, color: '#000000' }, // Preto
-          { r: 150, color: '#0055FF' }, // Azul
-          { r: 100, color: '#000000' }, // Preto
-          { r: 50,  color: '#00FFCC' }  // Centro azul claro / ciano para destaque
+          { r: 250, color: '#0055FF' },
+          { r: 200, color: '#000000' },
+          { r: 150, color: '#0055FF' },
+          { r: 100, color: '#000000' },
+          { r: 50,  color: '#00FFCC' }
         ];
 
         rings.forEach(ring => {
@@ -149,15 +159,13 @@
         if (!gameStarted || el.dataset.hit) return;
         el.dataset.hit = "true";
 
-        // Verifica se é o alvo especial (preto e azul)
         const isSpecial = el.dataset.special === "true";
-        const points = isSpecial ? 20 : 10; // Alvo especial vale o dobro (20 pts)
+        const points = isSpecial ? 20 : 10;
 
         score += points;
         const hudScore = document.getElementById('score-val');
         if (hudScore) hudScore.innerText = score;
         
-        // Animação de acerto
         el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
         setTimeout(() => {
           if (el.parentNode) {
@@ -225,7 +233,7 @@
         }
       });
 
-      // Gerenciador de alvos e Modo Arcade
+      // Gerenciador de alvos
       AFRAME.registerComponent('target-spawner', {
         init: function () {
           this.sceneEl = this.el;
@@ -236,7 +244,6 @@
         startSpawning: function () {
           this.spawnTarget();
 
-          // Gera novos alvos a cada 2.5 segundos
           this.spawnerInterval = setInterval(() => {
             if (!gameStarted) return;
             const currentTargets = document.querySelectorAll('.target');
@@ -263,14 +270,12 @@
           targetDisc.setAttribute('width', '1.2');
           targetDisc.setAttribute('height', '1.2');
 
-          // 25% de chance de nascer o alvo especial (preto e azul)
           const isSpecial = Math.random() < 0.25;
           targetDisc.dataset.special = isSpecial ? "true" : "false";
           const textureUrl = isSpecial ? this.specialTexture : this.normalTexture;
 
           targetDisc.setAttribute('material', `src: url(${textureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Posição 360° ao redor da câmara
           const angle = Math.random() * Math.PI * 2;
           const distance = 2.0 + Math.random() * 2.0;
           
@@ -291,7 +296,6 @@
             }
           }, 50);
 
-          // Alvo desaparece sozinho após 5 segundos
           setTimeout(() => {
             if (targetDisc.parentNode) {
               targetDisc.parentNode.removeChild(targetDisc);
@@ -301,13 +305,13 @@
 
         stop: function () {
           clearInterval(this.spawnerInterval);
-          // Remove todos os alvos restantes da cena
           document.querySelectorAll('.target').forEach(el => el.parentNode.removeChild(el));
         }
       });
 
-      // Iniciar o jogo
-      function startGame() {
+      // Selecionar modo e iniciar jogo
+      function selectMode(mode) {
+        gameMode = mode;
         score = 0;
         timeLeft = 30;
         gameStarted = true;
@@ -316,26 +320,30 @@
         document.getElementById('game-over-screen').style.display = 'none';
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('score-val').innerText = score;
-        document.getElementById('timer-val').innerText = timeLeft;
 
-        // Inicia o gerador de alvos
+        if (gameMode === 'arcade') {
+          document.getElementById('timer-container').style.display = 'block';
+          document.getElementById('timer-val').innerText = timeLeft;
+
+          timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer-val').innerText = timeLeft;
+
+            if (timeLeft <= 0) {
+              endGame();
+            }
+          }, 1000);
+        } else {
+          // Modo Livre (sem limite de tempo)
+          document.getElementById('timer-container').style.display = 'none';
+        }
+
         const scene = document.querySelector('a-scene');
         if (scene && scene.components['target-spawner']) {
           scene.components['target-spawner'].startSpawning();
         }
-
-        // Inicia o cronômetro decrescente (Modo Arcade)
-        timerInterval = setInterval(() => {
-          timeLeft--;
-          document.getElementById('timer-val').innerText = timeLeft;
-
-          if (timeLeft <= 0) {
-            endGame();
-          }
-        }, 1000);
       }
 
-      // Fim do jogo
       function endGame() {
         gameStarted = false;
         clearInterval(timerInterval);
@@ -349,28 +357,45 @@
         document.getElementById('final-score').innerText = score;
         document.getElementById('game-over-screen').style.display = 'flex';
       }
+
+      function returnToMenu() {
+        gameStarted = false;
+        clearInterval(timerInterval);
+
+        const scene = document.querySelector('a-scene');
+        if (scene && scene.components['target-spawner']) {
+          scene.components['target-spawner'].stop();
+        }
+
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('game-over-screen').style.display = 'none';
+        document.getElementById('start-screen').style.display = 'flex';
+      }
     </script>
   </head>
   <body style="margin: 0px; overflow: hidden;">
     
-    <!-- Menu Inicial -->
+    <!-- Menu Inicial com Seleção de Modos -->
     <div id="start-screen" class="screen">
-      <h1>Modo Arcade AR</h1>
-      <p>Você tem 30 segundos! Olhe ao redor em 360°. Alvos vermelhos valem 10 pts. Alvos listrados de preto e azul valem o dobro (20 pts)!</p>
-      <button class="btn" onclick="startGame()">INICIAR JOGO</button>
+      <h1>Tiro ao Alvo AR</h1>
+      <p>Alvos vermelhos = 10 pts.<br>Alvos pretos e azuis (especiais) = 20 pts!</p>
+      
+      <button class="btn" onclick="selectMode('arcade')">Modo Arcade (30s)</button>
+      <button class="btn btn-secondary" onclick="selectMode('livre')">Modo Livre (Sem Tempo)</button>
     </div>
 
     <!-- Tela de Fim de Jogo -->
     <div id="game-over-screen" class="screen">
       <h1>Fim de Jogo!</h1>
-      <p>Sua pontuação final foi: <span id="final-score" style="color: #E50914; font-weight: bold;">0</span> pontos.</p>
-      <button class="btn" onclick="startGame()">JOGAR NOVAMENTE</button>
+      <p>Pontuação final: <span id="final-score" style="color: #E50914; font-weight: bold;">0</span> pontos.</p>
+      <button class="btn" onclick="selectMode(gameMode)">Jogar Novamente</button>
+      <button class="btn btn-secondary" onclick="returnToMenu()">Menu Principal</button>
     </div>
 
     <!-- Placar e Cronômetro (HUD) -->
     <div id="hud">
       <div>Pontos: <span id="score-val">0</span></div>
-      <div>Tempo: <span id="timer-val">30</span>s</div>
+      <div id="timer-container">Tempo: <span id="timer-val">30</span>s</div>
     </div>
 
     <!-- Cena A-Frame com AR.js -->
