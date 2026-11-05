@@ -3,8 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - Three.js</title>
-    <!-- Importando Three.js Nativo -->
+    <title>AR Tiro ao Alvo - Distância Realista</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -20,7 +19,7 @@
         background-color: #000;
       }
 
-      /* Interface das Telas */
+      /* Camada de UI / Telas */
       .ui-layer {
         position: fixed;
         top: 0;
@@ -84,9 +83,10 @@
         width: auto;
         margin: 0;
         box-shadow: none;
+        cursor: pointer;
       }
 
-      /* HUD em cima da câmera */
+      /* HUD */
       #hud {
         position: absolute;
         top: 15px;
@@ -112,11 +112,11 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 20px;
-        height: 20px;
-        margin-top: -10px;
-        margin-left: -10px;
-        border: 2px solid rgba(255, 255, 255, 0.8);
+        width: 16px;
+        height: 16px;
+        margin-top: -8px;
+        margin-left: -8px;
+        border: 2px solid rgba(255, 255, 255, 0.9);
         border-radius: 50%;
         pointer-events: none;
         z-index: 400;
@@ -126,8 +126,8 @@
       #crosshair::after {
         content: '';
         position: absolute;
-        top: 8px;
-        left: 8px;
+        top: 6px;
+        left: 6px;
         width: 4px;
         height: 4px;
         background: white;
@@ -143,7 +143,7 @@
       <p>
         Vermelho = 10 pts<br>
         <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Gire o celular em 360° para encontrar alvos espalhados no ambiente!
+        Gire o celular em 360° para acertar os alvos distantes!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -161,7 +161,7 @@
     <div id="hud">
       <div>Pontos: <span id="score-val">0</span></div>
       <div id="timer-box">Tempo: <span id="timer-val">30</span>s</div>
-      <button class="btn btn-quit" onclick="returnToMenu()">Sair / Menu</button>
+      <button class="btn btn-quit" onclick="returnToMenu()">Menu</button>
     </div>
 
     <!-- Mira Central -->
@@ -179,7 +179,6 @@
 
       let normalTexture, specialTexture;
 
-      // Textura Vermelha
       function createNormalTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 256; canvas.height = 256;
@@ -194,7 +193,6 @@
         return new THREE.CanvasTexture(canvas);
       }
 
-      // Textura Azul/Preta (Alvo Especial)
       function createSpecialTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 256; canvas.height = 256;
@@ -211,14 +209,13 @@
 
       function initThreeJS() {
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Ouve os sensores de rotação do Smartphone (Giroscópio 360°)
         if (window.DeviceOrientationEvent) {
           window.addEventListener('deviceorientation', onDeviceOrientation, false);
         }
@@ -229,7 +226,7 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
-        // Câmera Traseira Nativa
+        // Ativação da câmera traseira no fundo
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -244,9 +241,7 @@
             video.style.zIndex = '-1';
             document.body.appendChild(video);
           })
-          .catch(err => {
-            console.warn("Permissão de câmera não concedida:", err);
-          });
+          .catch(err => console.warn("Câmera indisponível:", err));
 
         window.addEventListener('resize', onWindowResize);
         window.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -255,7 +250,6 @@
         animate();
       }
 
-      // Rotação da Câmera 3D via Giroscópio
       function onDeviceOrientation(event) {
         if (event.alpha !== null) {
           const alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
@@ -269,7 +263,7 @@
 
       function spawnTarget() {
         if (!gameStarted) return;
-        if (targets.length >= 5) return;
+        if (targets.length >= 6) return;
 
         const isSpecial = Math.random() < 0.35;
         const mat = new THREE.MeshBasicMaterial({
@@ -278,30 +272,30 @@
           side: THREE.DoubleSide
         });
 
-        // Tamanho de 0.8m a 1.5m
-        const size = 0.8 + Math.random() * 0.7;
+        // ILUSÃO DE DISTÂNCIA: Tamanho reduzido (0.35m a 0.6m) para parecerem longe
+        const size = 0.35 + Math.random() * 0.25;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
         mesh.userData = { isSpecial: isSpecial, hit: false };
 
-        // DISTÂNCIA REAL: 6 a 10 metros de distância
+        // Posicionamento esférico em 360° a uma distância aparente grande
         const angle = Math.random() * Math.PI * 2;
-        const distance = 6.0 + Math.random() * 4.0;
-        const height = (Math.random() - 0.5) * 4.0;
+        const distance = 8.0 + Math.random() * 5.0; // 8 a 13 metros de distância virtual
+        const height = (Math.random() - 0.5) * 3.5;
 
         mesh.position.set(
-          camera.position.x + Math.cos(angle) * distance,
-          camera.position.y + height,
-          camera.position.z + Math.sin(angle) * distance
+          Math.cos(angle) * distance,
+          height,
+          Math.sin(angle) * distance
         );
 
-        mesh.lookAt(camera.position);
+        mesh.lookAt(0, height, 0); // Olha para o centro onde o jogador está
 
         scene.add(mesh);
         targets.push(mesh);
 
-        setTimeout(() => { removeTarget(mesh); }, 6500);
+        setTimeout(() => { removeTarget(mesh); }, 7000);
       }
 
       function removeTarget(mesh) {
@@ -379,7 +373,7 @@
 
         if (spawnInterval) clearInterval(spawnInterval);
         spawnTarget();
-        spawnInterval = setInterval(spawnTarget, 2000);
+        spawnInterval = setInterval(spawnTarget, 1800);
       }
 
       function endGame() {
