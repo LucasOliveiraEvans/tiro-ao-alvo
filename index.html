@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - Estável</title>
+    <title>AR Tiro ao Alvo - 360 Real</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -143,7 +143,7 @@
       <p>
         Vermelho = 10 pts<br>
         <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Toque nos alvos para pontuar!
+        Gire o celular em 360° para encontrar os alvos no ambiente 3D!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -217,7 +217,7 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Suporte seguro ao giroscópio com pedido de permissão para iOS/Android modernos
+        // Permissão para o giroscópio em dispositivos móveis
         window.addEventListener('click', () => {
           if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission().catch(() => {});
@@ -234,7 +234,7 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
-        // Ativação da câmera traseira
+        // Ativação da câmara traseira
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -280,25 +280,27 @@
           side: THREE.DoubleSide
         });
 
-        // Tamanho equilibrado (0.6m) para boa visibilidade e sensação de profundidade moderada
-        const size = 0.6;
+        // Tamanho ideal de 1.2 metros (perfeito para parecer um alvo real posicionado no ambiente)
+        const size = 1.2;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
         mesh.userData = { isSpecial: isSpecial, hit: false };
 
-        // Posicionamento garantido na área frontal de visão (distância de 5 a 8 metros)
+        // POSICIONAMENTO EM 360 GRAUS NO AMBIENTE:
+        // Distância intermédia de 5 a 8 metros ao redor da câmara
+        const angle = Math.random() * Math.PI * 2;
         const distance = 5.0 + Math.random() * 3.0;
-        const angle = (Math.random() - 0.5) * Math.PI * 0.8; // Espaço frontal em leque
-        const height = (Math.random() - 0.5) * 2.0;
+        const height = (Math.random() - 0.5) * 2.5;
 
         mesh.position.set(
-          Math.sin(angle) * distance,
+          Math.cos(angle) * distance,
           height,
-          -Math.cos(angle) * distance
+          Math.sin(angle) * distance
         );
 
-        mesh.lookAt(camera.position);
+        // Faz o alvo estar virado exatamente para o centro (onde está o utilizador)
+        mesh.lookAt(0, height, 0);
 
         scene.add(mesh);
         targets.push(mesh);
