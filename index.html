@@ -1,332 +1,356 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8">
-    <title>AR Tiro ao Alvo - Modos de Jogo</title>
-    <!-- Importando A-Frame e AR.js -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Tiro ao Alvo - Three.js</title>
+    <!-- Importando Three.js Nativo -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
+      * {
+        box-sizing: border-box;
+        user-select: none;
+        -webkit-user-select: none;
+      }
       body {
         margin: 0;
+        padding: 0;
         overflow: hidden;
         font-family: Arial, sans-serif;
+        background-color: #000;
       }
 
-      /* Interface das Telas por cima do AR */
+      /* Interface das Telas */
       .ui-layer {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
-        z-index: 999999;
-        pointer-events: auto;
-      }
-
-      .screen {
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.85);
+        z-index: 1000;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
+        background: rgba(0, 0, 0, 0.85);
         color: white;
         text-align: center;
         padding: 20px;
-        box-sizing: border-box;
       }
 
-      .screen h1 {
-        font-size: 32px;
-        margin-bottom: 10px;
+      h1 {
+        font-size: 28px;
+        margin-bottom: 12px;
         text-transform: uppercase;
         letter-spacing: 2px;
-        color: #FFFFFF;
       }
 
-      .screen p {
+      p {
         font-size: 15px;
+        color: #ddd;
+        max-width: 320px;
+        line-height: 1.5;
         margin-bottom: 25px;
-        color: #DDD;
-        max-width: 90%;
-        line-height: 1.4;
       }
 
       .btn {
         width: 100%;
-        max-width: 280px;
-        padding: 15px 20px;
+        max-width: 260px;
+        padding: 16px 20px;
         font-size: 18px;
         font-weight: bold;
         color: white;
-        background-color: #E50914;
+        background: #E50914;
         border: none;
         border-radius: 30px;
         cursor: pointer;
         box-shadow: 0 4px 15px rgba(229, 9, 20, 0.5);
         margin-bottom: 15px;
-        pointer-events: auto;
-        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
       }
 
       .btn-secondary {
-        background-color: #0055FF;
+        background: #0055FF;
         box-shadow: 0 4px 15px rgba(0, 85, 255, 0.5);
       }
 
-      .btn:active {
-        transform: scale(0.95);
+      .btn-quit {
+        background: #333;
+        color: #fff;
+        font-size: 13px;
+        padding: 8px 14px;
+        border-radius: 20px;
+        border: 1px solid #666;
+        width: auto;
+        margin: 0;
+        box-shadow: none;
       }
 
-      /* Placar e Cronômetro (HUD) */
+      /* HUD em cima da câmera */
       #hud {
         position: absolute;
-        top: 20px;
-        left: 20px;
-        right: 20px;
-        display: flex;
+        top: 15px;
+        left: 15px;
+        right: 15px;
+        display: none;
         justify-content: space-between;
+        align-items: center;
         color: white;
-        font-size: 22px;
+        font-size: 20px;
         font-weight: bold;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
-        z-index: 99999;
+        z-index: 500;
         pointer-events: none;
-        user-select: none;
+      }
+
+      #hud * {
+        pointer-events: auto;
+      }
+
+      /* Retículo de mira central */
+      #crosshair {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 20px;
+        height: 20px;
+        margin-top: -10px;
+        margin-left: -10px;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 400;
         display: none;
       }
+
+      #crosshair::after {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 4px;
+        height: 4px;
+        background: white;
+        border-radius: 50%;
+      }
     </style>
+  </head>
+  <body>
+
+    <!-- Menu Inicial -->
+    <div id="start-layer" class="ui-layer">
+      <h1>Tiro ao Alvo AR</h1>
+      <p>
+        Vermelho = 10 pts<br>
+        <b>Preto & Azul (Especial) = 20 pts</b><br><br>
+        Gire o celular em 360° para encontrar alvos espalhados no ambiente!
+      </p>
+      <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
+      <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
+    </div>
+
+    <!-- Tela de Game Over -->
+    <div id="game-over-layer" class="ui-layer" style="display: none;">
+      <h1>Fim de Jogo!</h1>
+      <p>Pontuação Final:<br><span id="final-score" style="font-size: 36px; color: #E50914; font-weight: bold;">0</span> PONTOS</p>
+      <button class="btn" onclick="startGame(gameMode)">JOGAR NOVAMENTE</button>
+      <button class="btn btn-secondary" onclick="returnToMenu()">MENU PRINCIPAL</button>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div>Pontos: <span id="score-val">0</span></div>
+      <div id="timer-box">Tempo: <span id="timer-val">30</span>s</div>
+      <button class="btn btn-quit" onclick="returnToMenu()">Sair / Menu</button>
+    </div>
+
+    <!-- Mira Central -->
+    <div id="crosshair"></div>
+
     <script>
+      let camera, scene, renderer;
+      let targets = [];
       let score = 0;
       let timeLeft = 30;
       let gameMode = 'arcade';
       let gameStarted = false;
       let timerInterval = null;
-      let normalTextureUrl = "";
-      let specialTextureUrl = "";
+      let spawnInterval = null;
 
-      // Textura Vermelha e Branca (Alvo Normal - 10 pts)
-      function createNormalTargetTexture() {
+      let normalTexture, specialTexture;
+
+      // Textura Vermelha
+      function createNormalTexture() {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = 256; canvas.height = 256;
         const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, 512, 512);
-
-        const rings = [
-          { r: 250, color: '#E50914' },
-          { r: 200, color: '#FFFFFF' },
-          { r: 150, color: '#E50914' },
-          { r: 100, color: '#FFFFFF' },
-          { r: 50,  color: '#E50914' }
-        ];
-
-        rings.forEach(ring => {
+        const rings = ['#E50914', '#FFFFFF', '#E50914', '#FFFFFF', '#E50914'];
+        rings.forEach((color, i) => {
           ctx.beginPath();
-          ctx.arc(256, 256, ring.r, 0, 2 * Math.PI, false);
-          ctx.fillStyle = ring.color;
+          ctx.arc(128, 128, 128 - (i * 24), 0, Math.PI * 2);
+          ctx.fillStyle = color;
           ctx.fill();
         });
-
-        return canvas.toDataURL();
+        return new THREE.CanvasTexture(canvas);
       }
 
-      // Textura Listrada de Preto e Azul (Alvo Especial - 20 pts)
-      function createSpecialTargetTexture() {
+      // Textura Azul/Preta (Alvo Especial)
+      function createSpecialTexture() {
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = 256; canvas.height = 256;
         const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, 512, 512);
-
-        const rings = [
-          { r: 250, color: '#0055FF' }, // Azul
-          { r: 200, color: '#000000' }, // Preto
-          { r: 150, color: '#0055FF' }, // Azul
-          { r: 100, color: '#000000' }, // Preto
-          { r: 50,  color: '#00E5FF' }  // Centro Azul Claro
-        ];
-
-        rings.forEach(ring => {
+        const rings = ['#0055FF', '#000000', '#0055FF', '#000000', '#00E5FF'];
+        rings.forEach((color, i) => {
           ctx.beginPath();
-          ctx.arc(256, 256, ring.r, 0, 2 * Math.PI, false);
-          ctx.fillStyle = ring.color;
+          ctx.arc(128, 128, 128 - (i * 24), 0, Math.PI * 2);
+          ctx.fillStyle = color;
           ctx.fill();
         });
-
-        return canvas.toDataURL();
+        return new THREE.CanvasTexture(canvas);
       }
 
-      // Destruição do Alvo e Pontuação
-      function hitTarget(el) {
-        if (!gameStarted || el.dataset.hit === "true") return;
-        el.dataset.hit = "true";
+      function initThreeJS() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
 
-        const isSpecial = el.dataset.special === "true";
-        const points = isSpecial ? 20 : 10;
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
 
-        score += points;
-        const hudScore = document.getElementById('score-val');
-        if (hudScore) hudScore.innerText = score;
-        
-        el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
-        setTimeout(() => {
-          if (el.parentNode) {
-            el.parentNode.removeChild(el);
-          }
-        }, 150);
+        // Ouve os sensores de rotação do Smartphone (Giroscópio 360°)
+        if (window.DeviceOrientationEvent) {
+          window.addEventListener('deviceorientation', onDeviceOrientation, false);
+        }
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(ambientLight);
+
+        normalTexture = createNormalTexture();
+        specialTexture = createSpecialTexture();
+
+        // Câmera Traseira Nativa
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(stream => {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+            video.style.position = 'fixed';
+            video.style.top = '0';
+            video.style.left = '0';
+            video.style.width = '100vw';
+            video.style.height = '100vh';
+            video.style.objectFit = 'cover';
+            video.style.zIndex = '-1';
+            document.body.appendChild(video);
+          })
+          .catch(err => {
+            console.warn("Permissão de câmera não concedida:", err);
+          });
+
+        window.addEventListener('resize', onWindowResize);
+        window.addEventListener('touchstart', onTouchStart, { passive: false });
+        window.addEventListener('click', onClick);
+
+        animate();
       }
 
-      // Componente do Alvo
-      AFRAME.registerComponent('shootable', {
-        init: function () {
-          const el = this.el;
-          el.addEventListener('click', () => hitTarget(el));
-          el.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            hitTarget(el);
-          });
-        }
-      });
-
-      // Manipulador Global de Toque na Tela
-      AFRAME.registerComponent('screen-tap-handler', {
-        init: function () {
-          const sceneEl = this.el;
+      // Rotação da Câmera 3D via Giroscópio
+      function onDeviceOrientation(event) {
+        if (event.alpha !== null) {
+          const alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+          const beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
+          const gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
           
-          const handleTap = (clientX, clientY) => {
-            if (!gameStarted) return;
-
-            const cameraEl = sceneEl.camera;
-            if (!cameraEl) return;
-
-            const mouse = new THREE.Vector2();
-            mouse.x = (clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, cameraEl);
-
-            const targetEls = document.querySelectorAll('.target');
-            const targetObjects = Array.from(targetEls).map(el => el.object3D);
-
-            const intersects = raycaster.intersectObjects(targetObjects, true);
-
-            if (intersects.length > 0) {
-              let obj = intersects[0].object;
-              while (obj && !obj.el && obj.parent) {
-                obj = obj.parent;
-              }
-              if (obj && obj.el) {
-                hitTarget(obj.el);
-              }
-            }
-          };
-
-          window.addEventListener('click', (evt) => {
-            // Previne disparo ao clicar nos botões da interface
-            if (evt.target.tagName === 'BUTTON') return;
-            handleTap(evt.clientX, evt.clientY);
-          });
-
-          window.addEventListener('touchend', (evt) => {
-            if (evt.target.tagName === 'BUTTON') return;
-            if (evt.changedTouches.length > 0) {
-              const touch = evt.changedTouches[0];
-              handleTap(touch.clientX, touch.clientY);
-            }
-          });
+          const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
+          camera.quaternion.setFromEuler(euler);
         }
-      });
+      }
 
-      // Gerenciador de Alvos (Spawn em 360°, Distância e Tamanhos Variados)
-      AFRAME.registerComponent('target-spawner', {
-        init: function () {
-          this.sceneEl = this.el;
-          normalTextureUrl = createNormalTargetTexture();
-          specialTextureUrl = createSpecialTargetTexture();
-        },
+      function spawnTarget() {
+        if (!gameStarted) return;
+        if (targets.length >= 5) return;
 
-        startSpawning: function () {
-          this.spawnTarget();
+        const isSpecial = Math.random() < 0.35;
+        const mat = new THREE.MeshBasicMaterial({
+          map: isSpecial ? specialTexture : normalTexture,
+          transparent: true,
+          side: THREE.DoubleSide
+        });
 
-          this.spawnerInterval = setInterval(() => {
-            if (!gameStarted) return;
-            const currentTargets = document.querySelectorAll('.target');
-            if (currentTargets.length < 4) {
-              this.spawnTarget();
-            }
-          }, 2200);
-        },
+        // Tamanho de 0.8m a 1.5m
+        const size = 0.8 + Math.random() * 0.7;
+        const geo = new THREE.PlaneGeometry(size, size);
+        const mesh = new THREE.Mesh(geo, mat);
 
-        spawnTarget: function () {
-          if (!gameStarted) return;
+        mesh.userData = { isSpecial: isSpecial, hit: false };
 
-          const cameraEl = document.querySelector('#main-camera');
-          let cameraPos = { x: 0, y: 1.6, z: 0 };
-          if (cameraEl && cameraEl.object3D) {
-            const worldPos = new THREE.Vector3();
-            cameraEl.object3D.getWorldPosition(worldPos);
-            cameraPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+        // DISTÂNCIA REAL: 6 a 10 metros de distância
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 6.0 + Math.random() * 4.0;
+        const height = (Math.random() - 0.5) * 4.0;
+
+        mesh.position.set(
+          camera.position.x + Math.cos(angle) * distance,
+          camera.position.y + height,
+          camera.position.z + Math.sin(angle) * distance
+        );
+
+        mesh.lookAt(camera.position);
+
+        scene.add(mesh);
+        targets.push(mesh);
+
+        setTimeout(() => { removeTarget(mesh); }, 6500);
+      }
+
+      function removeTarget(mesh) {
+        const idx = targets.indexOf(mesh);
+        if (idx !== -1) {
+          targets.splice(idx, 1);
+          scene.remove(mesh);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) mesh.material.dispose();
+        }
+      }
+
+      function checkShoot(clientX, clientY) {
+        if (!gameStarted) return;
+
+        const mouse = new THREE.Vector2();
+        mouse.x = (clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(targets);
+
+        if (intersects.length > 0) {
+          const hitMesh = intersects[0].object;
+          if (hitMesh && !hitMesh.userData.hit) {
+            hitMesh.userData.hit = true;
+            const pts = hitMesh.userData.isSpecial ? 20 : 10;
+            score += pts;
+            document.getElementById('score-val').innerText = score;
+            removeTarget(hitMesh);
           }
-
-          const targetDisc = document.createElement('a-plane');
-          targetDisc.setAttribute('class', 'target');
-          targetDisc.setAttribute('shootable', '');
-
-          // Variar Tamanho do Alvo (entre 0.8m e 1.6m)
-          const randomSize = (Math.random() * 0.8 + 0.8).toFixed(2);
-          targetDisc.setAttribute('width', randomSize);
-          targetDisc.setAttribute('height', randomSize);
-
-          // 35% de chance de nascer Alvo Especial (Preto e Azul)
-          const isSpecial = Math.random() < 0.35;
-          targetDisc.dataset.special = isSpecial ? "true" : "false";
-          const textureUrl = isSpecial ? specialTextureUrl : normalTextureUrl;
-
-          targetDisc.setAttribute('material', `src: url(${textureUrl}); transparent: true; side: double; shader: flat`);
-
-          // Maior Distância (entre 3.5m e 6.0m do jogador)
-          const angle = Math.random() * Math.PI * 2;
-          const distance = 3.5 + Math.random() * 2.5;
-          
-          const x = cameraPos.x + Math.cos(angle) * distance;
-          const y = cameraPos.y + (Math.random() - 0.5) * 2.0; // Variação de altura maior
-          const z = cameraPos.z + Math.sin(angle) * distance;
-
-          targetDisc.setAttribute('position', `${x} ${y} ${z}`);
-          targetDisc.setAttribute('animation', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 300');
-
-          this.sceneEl.appendChild(targetDisc);
-
-          setTimeout(() => {
-            if (targetDisc.object3D && cameraEl && cameraEl.object3D) {
-              const camPos = new THREE.Vector3();
-              cameraEl.object3D.getWorldPosition(camPos);
-              targetDisc.object3D.lookAt(camPos);
-            }
-          }, 50);
-
-          // Alvo expira após 5.5 segundos
-          setTimeout(() => {
-            if (targetDisc.parentNode) {
-              targetDisc.parentNode.removeChild(targetDisc);
-            }
-          }, 5500);
-        },
-
-        stop: function () {
-          clearInterval(this.spawnerInterval);
-          document.querySelectorAll('.target').forEach(el => {
-            if (el.parentNode) el.parentNode.removeChild(el);
-          });
         }
-      });
+      }
 
-      // Inicialização do Modo Selecionado
-      function selectMode(mode) {
+      function onTouchStart(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        if (e.touches.length > 0) {
+          checkShoot(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }
+
+      function onClick(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        checkShoot(e.clientX, e.clientY);
+      }
+
+      function startGame(mode) {
         gameMode = mode;
         score = 0;
         timeLeft = 30;
@@ -335,105 +359,65 @@
         document.getElementById('start-layer').style.display = 'none';
         document.getElementById('game-over-layer').style.display = 'none';
         document.getElementById('hud').style.display = 'flex';
+        document.getElementById('crosshair').style.display = 'block';
         document.getElementById('score-val').innerText = score;
 
-        if (gameMode === 'arcade') {
-          document.getElementById('timer-container').style.display = 'block';
-          document.getElementById('timer-val').innerText = timeLeft;
+        [...targets].forEach(removeTarget);
 
+        if (gameMode === 'arcade') {
+          document.getElementById('timer-box').style.display = 'block';
+          document.getElementById('timer-val').innerText = timeLeft;
           if (timerInterval) clearInterval(timerInterval);
           timerInterval = setInterval(() => {
             timeLeft--;
             document.getElementById('timer-val').innerText = timeLeft;
-
-            if (timeLeft <= 0) {
-              endGame();
-            }
+            if (timeLeft <= 0) endGame();
           }, 1000);
         } else {
-          document.getElementById('timer-container').style.display = 'none';
+          document.getElementById('timer-box').style.display = 'none';
         }
 
-        const scene = document.querySelector('a-scene');
-        if (scene && scene.components['target-spawner']) {
-          scene.components['target-spawner'].startSpawning();
-        }
+        if (spawnInterval) clearInterval(spawnInterval);
+        spawnTarget();
+        spawnInterval = setInterval(spawnTarget, 2000);
       }
 
       function endGame() {
         gameStarted = false;
-        if (timerInterval) clearInterval(timerInterval);
-
-        const scene = document.querySelector('a-scene');
-        if (scene && scene.components['target-spawner']) {
-          scene.components['target-spawner'].stop();
-        }
+        clearInterval(timerInterval);
+        clearInterval(spawnInterval);
+        [...targets].forEach(removeTarget);
 
         document.getElementById('hud').style.display = 'none';
+        document.getElementById('crosshair').style.display = 'none';
         document.getElementById('final-score').innerText = score;
-        document.getElementById('game-over-layer').style.display = 'block';
+        document.getElementById('game-over-layer').style.display = 'flex';
       }
 
       function returnToMenu() {
         gameStarted = false;
-        if (timerInterval) clearInterval(timerInterval);
-
-        const scene = document.querySelector('a-scene');
-        if (scene && scene.components['target-spawner']) {
-          scene.components['target-spawner'].stop();
-        }
+        clearInterval(timerInterval);
+        clearInterval(spawnInterval);
+        [...targets].forEach(removeTarget);
 
         document.getElementById('hud').style.display = 'none';
+        document.getElementById('crosshair').style.display = 'none';
         document.getElementById('game-over-layer').style.display = 'none';
-        document.getElementById('start-layer').style.display = 'block';
+        document.getElementById('start-layer').style.display = 'flex';
       }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      }
+
+      window.onload = initThreeJS;
     </script>
-  </head>
-  <body style="margin: 0px; overflow: hidden;">
-    
-    <!-- Tela de Menu Inicial -->
-    <div id="start-layer" class="ui-layer">
-      <div class="screen">
-        <h1>Tiro ao Alvo AR</h1>
-        <p>
-          Alvos Vermelhos = 10 pts<br>
-          <b>Alvos Pretos & Azuis = 20 pts (Especial)</b><br><br>
-          Gire 360° para encontrar alvos em várias distâncias e tamanhos!
-        </p>
-        <button class="btn" onclick="selectMode('arcade')">MODO ARCADE (30s)</button>
-        <button class="btn btn-secondary" onclick="selectMode('livre')">MODO LIVRE (Treino)</button>
-      </div>
-    </div>
-
-    <!-- Tela de Game Over -->
-    <div id="game-over-layer" class="ui-layer" style="display: none;">
-      <div class="screen">
-        <h1>Fim de Jogo!</h1>
-        <p>Pontuação Final: <br><span id="final-score" style="font-size: 36px; color: #E50914; font-weight: bold;">0</span> PONTOS</p>
-        <button class="btn" onclick="selectMode(gameMode)">JOGAR NOVAMENTE</button>
-        <button class="btn btn-secondary" onclick="returnToMenu()">MENU PRINCIPAL</button>
-      </div>
-    </div>
-
-    <!-- Interface HUD (Pontos e Tempo) -->
-    <div id="hud">
-      <div>Pontos: <span id="score-val">0</span></div>
-      <div id="timer-container">Tempo: <span id="timer-val">30</span>s</div>
-    </div>
-
-    <!-- Cena A-Frame + AR.js -->
-    <a-scene target-spawner screen-tap-handler embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
-      
-      <a-entity camera look-controls id="main-camera">
-        <!-- Retículo / Mira Central -->
-        <a-entity position="0 0 -1"
-                  geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
-                  material="color: white; shader: flat">
-        </a-entity>
-      </a-entity>
-
-      <a-light type="ambient" color="#FFF"></a-light>
-    </a-scene>
-
   </body>
 </html>
