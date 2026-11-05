@@ -13,19 +13,25 @@
         font-family: Arial, sans-serif;
       }
 
-      /* Telas de Menu e Fim de Jogo */
-      .screen {
+      /* Interface das Telas por cima do AR */
+      .ui-layer {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
+        z-index: 999999;
+        pointer-events: auto;
+      }
+
+      .screen {
+        width: 100%;
+        height: 100%;
         background: rgba(0, 0, 0, 0.85);
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        z-index: 999999;
         color: white;
         text-align: center;
         padding: 20px;
@@ -33,23 +39,25 @@
       }
 
       .screen h1 {
-        font-size: 30px;
+        font-size: 32px;
         margin-bottom: 10px;
         text-transform: uppercase;
         letter-spacing: 2px;
+        color: #FFFFFF;
       }
 
       .screen p {
         font-size: 15px;
         margin-bottom: 25px;
-        color: #ccc;
+        color: #DDD;
         max-width: 90%;
+        line-height: 1.4;
       }
 
       .btn {
         width: 100%;
         max-width: 280px;
-        padding: 14px 20px;
+        padding: 15px 20px;
         font-size: 18px;
         font-weight: bold;
         color: white;
@@ -57,14 +65,15 @@
         border: none;
         border-radius: 30px;
         cursor: pointer;
-        box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+        box-shadow: 0 4px 15px rgba(229, 9, 20, 0.5);
         margin-bottom: 15px;
-        transition: transform 0.2s, background-color 0.2s;
+        pointer-events: auto;
+        touch-action: manipulation;
       }
 
       .btn-secondary {
-        background-color: #333;
-        border: 2px solid #555;
+        background-color: #0055FF;
+        box-shadow: 0 4px 15px rgba(0, 85, 255, 0.5);
       }
 
       .btn:active {
@@ -82,31 +91,28 @@
         color: white;
         font-size: 22px;
         font-weight: bold;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
         z-index: 99999;
         pointer-events: none;
         user-select: none;
-        display: none;
-      }
-
-      #game-over-screen {
         display: none;
       }
     </style>
     <script>
       let score = 0;
       let timeLeft = 30;
-      let gameMode = 'arcade'; // 'arcade' ou 'livre'
+      let gameMode = 'arcade';
       let gameStarted = false;
       let timerInterval = null;
+      let normalTextureUrl = "";
+      let specialTextureUrl = "";
 
-      // Cria a textura do alvo normal (Vermelho e Branco)
+      // Textura Vermelha e Branca (Alvo Normal - 10 pts)
       function createNormalTargetTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
-
         ctx.clearRect(0, 0, 512, 512);
 
         const rings = [
@@ -127,21 +133,20 @@
         return canvas.toDataURL();
       }
 
-      // Cria a textura do alvo especial (Listras Pretas e Azuis)
+      // Textura Listrada de Preto e Azul (Alvo Especial - 20 pts)
       function createSpecialTargetTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
-
         ctx.clearRect(0, 0, 512, 512);
 
         const rings = [
-          { r: 250, color: '#0055FF' },
-          { r: 200, color: '#000000' },
-          { r: 150, color: '#0055FF' },
-          { r: 100, color: '#000000' },
-          { r: 50,  color: '#00FFCC' }
+          { r: 250, color: '#0055FF' }, // Azul
+          { r: 200, color: '#000000' }, // Preto
+          { r: 150, color: '#0055FF' }, // Azul
+          { r: 100, color: '#000000' }, // Preto
+          { r: 50,  color: '#00E5FF' }  // Centro Azul Claro
         ];
 
         rings.forEach(ring => {
@@ -154,9 +159,9 @@
         return canvas.toDataURL();
       }
 
-      // Função para destruir o alvo e somar pontos
+      // Destruição do Alvo e Pontuação
       function hitTarget(el) {
-        if (!gameStarted || el.dataset.hit) return;
+        if (!gameStarted || el.dataset.hit === "true") return;
         el.dataset.hit = "true";
 
         const isSpecial = el.dataset.special === "true";
@@ -174,7 +179,7 @@
         }, 150);
       }
 
-      // Componente do alvo
+      // Componente do Alvo
       AFRAME.registerComponent('shootable', {
         init: function () {
           const el = this.el;
@@ -186,7 +191,7 @@
         }
       });
 
-      // Manipulador global de toque na tela
+      // Manipulador Global de Toque na Tela
       AFRAME.registerComponent('screen-tap-handler', {
         init: function () {
           const sceneEl = this.el;
@@ -221,10 +226,13 @@
           };
 
           window.addEventListener('click', (evt) => {
+            // Previne disparo ao clicar nos botões da interface
+            if (evt.target.tagName === 'BUTTON') return;
             handleTap(evt.clientX, evt.clientY);
           });
 
           window.addEventListener('touchend', (evt) => {
+            if (evt.target.tagName === 'BUTTON') return;
             if (evt.changedTouches.length > 0) {
               const touch = evt.changedTouches[0];
               handleTap(touch.clientX, touch.clientY);
@@ -233,12 +241,12 @@
         }
       });
 
-      // Gerenciador de alvos
+      // Gerenciador de Alvos (Spawn em 360°, Distância e Tamanhos Variados)
       AFRAME.registerComponent('target-spawner', {
         init: function () {
           this.sceneEl = this.el;
-          this.normalTexture = createNormalTargetTexture();
-          this.specialTexture = createSpecialTargetTexture();
+          normalTextureUrl = createNormalTargetTexture();
+          specialTextureUrl = createSpecialTargetTexture();
         },
 
         startSpawning: function () {
@@ -250,7 +258,7 @@
             if (currentTargets.length < 4) {
               this.spawnTarget();
             }
-          }, 2500);
+          }, 2200);
         },
 
         spawnTarget: function () {
@@ -267,20 +275,25 @@
           const targetDisc = document.createElement('a-plane');
           targetDisc.setAttribute('class', 'target');
           targetDisc.setAttribute('shootable', '');
-          targetDisc.setAttribute('width', '1.2');
-          targetDisc.setAttribute('height', '1.2');
 
-          const isSpecial = Math.random() < 0.25;
+          // Variar Tamanho do Alvo (entre 0.8m e 1.6m)
+          const randomSize = (Math.random() * 0.8 + 0.8).toFixed(2);
+          targetDisc.setAttribute('width', randomSize);
+          targetDisc.setAttribute('height', randomSize);
+
+          // 35% de chance de nascer Alvo Especial (Preto e Azul)
+          const isSpecial = Math.random() < 0.35;
           targetDisc.dataset.special = isSpecial ? "true" : "false";
-          const textureUrl = isSpecial ? this.specialTexture : this.normalTexture;
+          const textureUrl = isSpecial ? specialTextureUrl : normalTextureUrl;
 
           targetDisc.setAttribute('material', `src: url(${textureUrl}); transparent: true; side: double; shader: flat`);
 
+          // Maior Distância (entre 3.5m e 6.0m do jogador)
           const angle = Math.random() * Math.PI * 2;
-          const distance = 2.0 + Math.random() * 2.0;
+          const distance = 3.5 + Math.random() * 2.5;
           
           const x = cameraPos.x + Math.cos(angle) * distance;
-          const y = cameraPos.y + (Math.random() - 0.5) * 1.5;
+          const y = cameraPos.y + (Math.random() - 0.5) * 2.0; // Variação de altura maior
           const z = cameraPos.z + Math.sin(angle) * distance;
 
           targetDisc.setAttribute('position', `${x} ${y} ${z}`);
@@ -296,28 +309,31 @@
             }
           }, 50);
 
+          // Alvo expira após 5.5 segundos
           setTimeout(() => {
             if (targetDisc.parentNode) {
               targetDisc.parentNode.removeChild(targetDisc);
             }
-          }, 5000);
+          }, 5500);
         },
 
         stop: function () {
           clearInterval(this.spawnerInterval);
-          document.querySelectorAll('.target').forEach(el => el.parentNode.removeChild(el));
+          document.querySelectorAll('.target').forEach(el => {
+            if (el.parentNode) el.parentNode.removeChild(el);
+          });
         }
       });
 
-      // Selecionar modo e iniciar jogo
+      // Inicialização do Modo Selecionado
       function selectMode(mode) {
         gameMode = mode;
         score = 0;
         timeLeft = 30;
         gameStarted = true;
 
-        document.getElementById('start-screen').style.display = 'none';
-        document.getElementById('game-over-screen').style.display = 'none';
+        document.getElementById('start-layer').style.display = 'none';
+        document.getElementById('game-over-layer').style.display = 'none';
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('score-val').innerText = score;
 
@@ -325,6 +341,7 @@
           document.getElementById('timer-container').style.display = 'block';
           document.getElementById('timer-val').innerText = timeLeft;
 
+          if (timerInterval) clearInterval(timerInterval);
           timerInterval = setInterval(() => {
             timeLeft--;
             document.getElementById('timer-val').innerText = timeLeft;
@@ -334,7 +351,6 @@
             }
           }, 1000);
         } else {
-          // Modo Livre (sem limite de tempo)
           document.getElementById('timer-container').style.display = 'none';
         }
 
@@ -346,7 +362,7 @@
 
       function endGame() {
         gameStarted = false;
-        clearInterval(timerInterval);
+        if (timerInterval) clearInterval(timerInterval);
 
         const scene = document.querySelector('a-scene');
         if (scene && scene.components['target-spawner']) {
@@ -355,12 +371,12 @@
 
         document.getElementById('hud').style.display = 'none';
         document.getElementById('final-score').innerText = score;
-        document.getElementById('game-over-screen').style.display = 'flex';
+        document.getElementById('game-over-layer').style.display = 'block';
       }
 
       function returnToMenu() {
         gameStarted = false;
-        clearInterval(timerInterval);
+        if (timerInterval) clearInterval(timerInterval);
 
         const scene = document.querySelector('a-scene');
         if (scene && scene.components['target-spawner']) {
@@ -368,40 +384,48 @@
         }
 
         document.getElementById('hud').style.display = 'none';
-        document.getElementById('game-over-screen').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'flex';
+        document.getElementById('game-over-layer').style.display = 'none';
+        document.getElementById('start-layer').style.display = 'block';
       }
     </script>
   </head>
   <body style="margin: 0px; overflow: hidden;">
     
-    <!-- Menu Inicial com Seleção de Modos -->
-    <div id="start-screen" class="screen">
-      <h1>Tiro ao Alvo AR</h1>
-      <p>Alvos vermelhos = 10 pts.<br>Alvos pretos e azuis (especiais) = 20 pts!</p>
-      
-      <button class="btn" onclick="selectMode('arcade')">Modo Arcade (30s)</button>
-      <button class="btn btn-secondary" onclick="selectMode('livre')">Modo Livre (Sem Tempo)</button>
+    <!-- Tela de Menu Inicial -->
+    <div id="start-layer" class="ui-layer">
+      <div class="screen">
+        <h1>Tiro ao Alvo AR</h1>
+        <p>
+          Alvos Vermelhos = 10 pts<br>
+          <b>Alvos Pretos & Azuis = 20 pts (Especial)</b><br><br>
+          Gire 360° para encontrar alvos em várias distâncias e tamanhos!
+        </p>
+        <button class="btn" onclick="selectMode('arcade')">MODO ARCADE (30s)</button>
+        <button class="btn btn-secondary" onclick="selectMode('livre')">MODO LIVRE (Treino)</button>
+      </div>
     </div>
 
-    <!-- Tela de Fim de Jogo -->
-    <div id="game-over-screen" class="screen">
-      <h1>Fim de Jogo!</h1>
-      <p>Pontuação final: <span id="final-score" style="color: #E50914; font-weight: bold;">0</span> pontos.</p>
-      <button class="btn" onclick="selectMode(gameMode)">Jogar Novamente</button>
-      <button class="btn btn-secondary" onclick="returnToMenu()">Menu Principal</button>
+    <!-- Tela de Game Over -->
+    <div id="game-over-layer" class="ui-layer" style="display: none;">
+      <div class="screen">
+        <h1>Fim de Jogo!</h1>
+        <p>Pontuação Final: <br><span id="final-score" style="font-size: 36px; color: #E50914; font-weight: bold;">0</span> PONTOS</p>
+        <button class="btn" onclick="selectMode(gameMode)">JOGAR NOVAMENTE</button>
+        <button class="btn btn-secondary" onclick="returnToMenu()">MENU PRINCIPAL</button>
+      </div>
     </div>
 
-    <!-- Placar e Cronômetro (HUD) -->
+    <!-- Interface HUD (Pontos e Tempo) -->
     <div id="hud">
       <div>Pontos: <span id="score-val">0</span></div>
       <div id="timer-container">Tempo: <span id="timer-val">30</span>s</div>
     </div>
 
-    <!-- Cena A-Frame com AR.js -->
+    <!-- Cena A-Frame + AR.js -->
     <a-scene target-spawner screen-tap-handler embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
       
       <a-entity camera look-controls id="main-camera">
+        <!-- Retículo / Mira Central -->
         <a-entity position="0 0 -1"
                   geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
                   material="color: white; shader: flat">
