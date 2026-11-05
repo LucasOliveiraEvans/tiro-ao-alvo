@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>AR Tiro ao Alvo</title>
+    <!-- Importando o A-Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #111;
+      }
+      /* Estilo para o placar e interface (HUD) */
+      #hud {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: white;
+        font-family: Arial, sans-serif;
+        font-size: 24px;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        z-index: 10;
+        pointer-events: none;
+        user-select: none;
+      }
+    </style>
+    <script>
+      let score = 0;
+
+      // Cria a textura procedural do alvo clássico (círculos concêntricos)
+      function createTargetTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const centerX = 256;
+        const centerY = 256;
+
+        ctx.clearRect(0, 0, 512, 512);
+
+        const rings = [
+          { r: 250, color: '#E50914' }, // Borda externa vermelha
+          { r: 200, color: '#FFFFFF' }, // Anel branco
+          { r: 150, color: '#E50914' }, // Anel vermelho
+          { r: 100, color: '#FFFFFF' }, // Anel branco
+          { r: 50,  color: '#E50914' }  // Centro vermelho
+        ];
+
+        rings.forEach(ring => {
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, ring.r, 0, 2 * Math.PI, false);
+          ctx.fillStyle = ring.color;
+          ctx.fill();
+        });
+
+        return canvas.toDataURL();
+      }
+
+      // Componente para registrar o tiro / clique direto na entidade com geometria
+      AFRAME.registerComponent('shootable', {
+        init: function () {
+          const el = this.el;
+          
+          const hitHandler = (evt) => {
+            evt.stopPropagation();
+            
+            if (el.dataset.hit) return;
+            el.dataset.hit = "true";
+
+            score += 10;
+            document.getElementById('score-val').innerText = score;
+            
+            // Animação de acerto (encolher rapidamente)
+            el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
+            setTimeout(() => {
+              if (el.parentNode) {
+                el.parentNode.removeChild(el);
+              }
+            }, 150);
+          };
+
+          el.addEventListener('click', hitHandler);
+          el.addEventListener('mousedown', hitHandler);
+        }
+      });
+
+      // Componente para gerenciar a criação de alvos (máximo 4 simultâneos)
+      AFRAME.registerComponent('target-spawner', {
+        init: function () {
+          const sceneEl = this.el;
+          this.targetTextureUrl = createTargetTexture();
+
+          // Intervalo de 2.5 segundos
+          this.timer = setInterval(() => {
+            const currentTargets = document.querySelectorAll('.target');
+            if (currentTargets.length < 4) {
+              this.spawnTarget(sceneEl);
+            }
+          }, 2500);
+          
+          // Cria o primeiro alvo imediatamente
+          this.spawnTarget(sceneEl);
+        },
+
+        spawnTarget: function (sceneEl) {
+          // Criamos o plano com a geometria física, a textura e a classe do raycaster
+          const targetDisc = document.createElement('a-plane');
+          targetDisc.setAttribute('class', 'target');
+          targetDisc.setAttribute('shootable', '');
+          targetDisc.setAttribute('width', '1');
+          targetDisc.setAttribute('height', '1');
+          targetDisc.setAttribute('material', `src: url(${this.targetTextureUrl}); transparent: true; side: double; shader: flat`);
+
+          // Posições aleatórias ao redor do jogador
+          const x = (Math.random() - 0.5) * 4;
+          const y = Math.random() * 1.5 + 1;
+          const z = -Math.random() * 2 - 2;
+
+          targetDisc.setAttribute('position', `${x} ${y} ${z}`);
+
+          // Animação de escala de entrada
+          targetDisc.setAttribute('animation', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 300');
+
+          sceneEl.appendChild(targetDisc);
+
+          // Remove automaticamente após 6 segundos se não for atingido
+          setTimeout(() => {
+            if (targetDisc.parentNode) {
+              targetDisc.parentNode.removeChild(targetDisc);
+            }
+          }, 6000);
+        },
+
+        remove: function () {
+          clearInterval(this.timer);
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <!-- Placar na tela (HUD) -->
+    <div id="hud">Pontos: <span id="score-val">0</span></div>
+
+    <!-- Cena A-Frame -->
+    <a-scene target-spawner background="color: #222">
+      <!-- Câmera com cursor centralizado / raycaster mapeado direto para os alvos -->
+      <a-entity camera position="0 1.6 0" look-controls>
+        <a-entity cursor="rayOrigin: mouse"
+                  raycaster="objects: .target"
+                  position="0 0 -1"
+                  geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+                  material="color: white; shader: flat">
+        </a-entity>
+      </a-entity>
+
+      <!-- Luz ambiente -->
+      <a-light type="ambient" color="#FFF"></a-light>
+    </a-scene>
+  </body>
+</html>
