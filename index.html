@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - Distância Realista</title>
+    <title>AR Tiro ao Alvo - Distância Real</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -112,10 +112,10 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 16px;
-        height: 16px;
-        margin-top: -8px;
-        margin-left: -8px;
+        width: 14px;
+        height: 14px;
+        margin-top: -7px;
+        margin-left: -7px;
         border: 2px solid rgba(255, 255, 255, 0.9);
         border-radius: 50%;
         pointer-events: none;
@@ -126,8 +126,8 @@
       #crosshair::after {
         content: '';
         position: absolute;
-        top: 6px;
-        left: 6px;
+        top: 5px;
+        left: 5px;
         width: 4px;
         height: 4px;
         background: white;
@@ -143,7 +143,7 @@
       <p>
         Vermelho = 10 pts<br>
         <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Gire o celular em 360° para acertar os alvos distantes!
+        Gire o celular em 360° para acertar os alvos bem distantes!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -209,7 +209,9 @@
 
       function initThreeJS() {
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Aumentado o plano de corte máximo para renderizar longe (1000 metros)
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -226,7 +228,7 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
-        // Ativação da câmera traseira no fundo
+        // Câmera traseira do telemóvel
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -272,17 +274,17 @@
           side: THREE.DoubleSide
         });
 
-        // ILUSÃO DE DISTÂNCIA: Tamanho reduzido (0.35m a 0.6m) para parecerem longe
-        const size = 0.35 + Math.random() * 0.25;
+        // ILUSÃO DE DISTÂNCIA REAL: Alvos muito pequenos (0.15m a 0.25m)
+        const size = 0.15 + Math.random() * 0.1;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
         mesh.userData = { isSpecial: isSpecial, hit: false };
 
-        // Posicionamento esférico em 360° a uma distância aparente grande
+        // GERAÇÃO EM 360° BEM AFASTADA (10 a 18 metros de distância)
         const angle = Math.random() * Math.PI * 2;
-        const distance = 8.0 + Math.random() * 5.0; // 8 a 13 metros de distância virtual
-        const height = (Math.random() - 0.5) * 3.5;
+        const distance = 10.0 + Math.random() * 8.0; 
+        const height = (Math.random() - 0.5) * 5.0;
 
         mesh.position.set(
           Math.cos(angle) * distance,
@@ -290,12 +292,13 @@
           Math.sin(angle) * distance
         );
 
-        mesh.lookAt(0, height, 0); // Olha para o centro onde o jogador está
+        // Faz o alvo olhar sempre para o centro da câmara (0, height, 0)
+        mesh.lookAt(0, height, 0);
 
         scene.add(mesh);
         targets.push(mesh);
 
-        setTimeout(() => { removeTarget(mesh); }, 7000);
+        setTimeout(() => { removeTarget(mesh); }, 7500);
       }
 
       function removeTarget(mesh) {
@@ -373,7 +376,7 @@
 
         if (spawnInterval) clearInterval(spawnInterval);
         spawnTarget();
-        spawnInterval = setInterval(spawnTarget, 1800);
+        spawnInterval = setInterval(spawnTarget, 2000);
       }
 
       function endGame() {
