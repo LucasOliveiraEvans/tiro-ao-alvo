@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - Controle Total</title>
+    <title>AR Tiro ao Alvo - Dinâmico</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -135,7 +135,6 @@
         border-radius: 50%;
       }
 
-      /* Instrução de arrastar na tela */
       #drag-hint {
         position: absolute;
         bottom: 30px;
@@ -158,7 +157,7 @@
       <p>
         Vermelho = 10 pts<br>
         <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Arraste o dedo na tela para olhar ao redor em 360° e toque nos alvos!
+        Arraste o dedo na tela para explorar os alvos em movimento no ambiente 360°!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -181,7 +180,7 @@
 
     <!-- Mira Central -->
     <div id="crosshair"></div>
-    <div id="drag-hint">Arraste para girar a câmera</div>
+    <div id="drag-hint">Arraste para girar a câmera em 360°</div>
 
     <script>
       let camera, scene, renderer;
@@ -195,11 +194,11 @@
 
       let normalTexture, specialTexture;
 
-      // Variáveis para controle de toque/arrastar (Touch Look)
       let isDragging = false;
       let previousMousePosition = { x: 0, y: 0 };
       let lon = 0, lat = 0;
       let phi = 0, theta = 0;
+      let clock = new THREE.Clock();
 
       function createNormalTexture() {
         const canvas = document.createElement('canvas');
@@ -245,7 +244,6 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
-        // Câmera traseira do telemóvel no fundo
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -262,7 +260,6 @@
           })
           .catch(err => console.warn("Câmera indisponível:", err));
 
-        // Eventos de Contato / Arrastar para olhar ao redor
         window.addEventListener('resize', onWindowResize);
         
         document.addEventListener('pointerdown', onPointerDown, { passive: false });
@@ -272,7 +269,6 @@
         animate();
       }
 
-      // Lógica de rotação suave ao arrastar o dedo na tela
       function onPointerDown(e) {
         if (e.target.tagName === 'BUTTON') return;
         isDragging = true;
@@ -295,14 +291,12 @@
         if (!isDragging) return;
         isDragging = false;
 
-        // Se o movimento foi mínimo, conta como um tiro/clique
         const moveDist = Math.abs(e.clientX - previousMousePosition.x) + Math.abs(e.clientY - previousMousePosition.y);
         if (moveDist < 5 && e.target.tagName !== 'BUTTON') {
           checkShoot(e.clientX, e.clientY);
         }
       }
 
-      // Atualiza a direção para onde a câmara está a olhar com base no arrastar
       function updateCameraRotation() {
         phi = THREE.MathUtils.degToRad(90 - lat);
         theta = THREE.MathUtils.degToRad(lon);
@@ -326,35 +320,37 @@
           side: THREE.DoubleSide
         });
 
-        // Tamanho perfeitamente visível (1.2m)
         const size = 1.2;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
-        mesh.userData = { isSpecial: isSpecial, hit: false };
+        mesh.userData = {
+          isSpecial: isSpecial,
+          hit: false,
+          randomOffset: Math.random() * 10 // Para desfasar o movimento de flutuação
+        };
 
-        // Geração esférica em 360° ao redor da câmara (frente, costas, lados, altura dos olhos)
-        const u = Math.random();
-        const v = Math.random();
-        const spawnLon = u * 360;
-        const spawnLat = (v - 0.5) * 40; // Variação vertical controlada em torno do horizonte
+        const spawnLon = Math.random() * 360;
+        const spawnLat = (Math.random() - 0.5) * 40;
 
         const pPhi = THREE.MathUtils.degToRad(90 - spawnLat);
         const pTheta = THREE.MathUtils.degToRad(spawnLon);
         const distance = 6.0 + Math.random() * 3.0;
 
-        mesh.position.set(
+        const initialPos = new THREE.Vector3(
           distance * Math.sin(pPhi) * Math.cos(pTheta),
           distance * Math.cos(pPhi),
           distance * Math.sin(pPhi) * Math.sin(pTheta)
         );
 
+        mesh.position.copy(initialPos);
+        mesh.userData.initialPosition = initialPos;
         mesh.lookAt(camera.position);
 
         scene.add(mesh);
         targets.push(mesh);
 
-        setTimeout(() => { removeTarget(mesh); }, 7000);
+        setTimeout(() => { removeTarget(mesh); }, 7500);
       }
 
       function removeTarget(mesh) {
@@ -406,7 +402,6 @@
         document.getElementById('drag-hint').style.display = 'block';
         document.getElementById('score-val').innerText = score;
 
-        // Esconde a dica de arrastar após 4 segundos
         setTimeout(() => {
           const hint = document.getElementById('drag-hint');
           if (hint) hint.style.display = 'none';
@@ -429,7 +424,7 @@
 
         if (spawnInterval) clearInterval(spawnInterval);
         spawnTarget();
-        spawnInterval = setInterval(spawnTarget, 2000);
+        spawnInterval = setInterval(spawnTarget, 1800);
       }
 
       function endGame() {
@@ -466,6 +461,16 @@
 
       function animate() {
         requestAnimationFrame(animate);
+
+        const elapsedTime = clock.getElapsedTime();
+
+        // Animação contínua de movimento/flutuação dos alvos para parecerem dinâmicos
+        targets.forEach(mesh => {
+          const offset = mesh.userData.randomOffset;
+          mesh.position.y = mesh.userData.initialPosition.y + Math.sin(elapsedTime * 2 + offset) * 0.4;
+          mesh.lookAt(camera.position);
+        });
+
         updateCameraRotation();
         renderer.render(scene, camera);
       }
