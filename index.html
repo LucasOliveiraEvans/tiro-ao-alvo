@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - Dinâmico</title>
+    <title>AR Tiro ao Alvo - Three.js</title>
+    <!-- Importando Three.js Nativo -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -17,10 +18,9 @@
         overflow: hidden;
         font-family: Arial, sans-serif;
         background-color: #000;
-        touch-action: none;
       }
 
-      /* Camada de UI / Telas */
+      /* Interface das Telas */
       .ui-layer {
         position: fixed;
         top: 0;
@@ -84,10 +84,9 @@
         width: auto;
         margin: 0;
         box-shadow: none;
-        cursor: pointer;
       }
 
-      /* HUD */
+      /* HUD em cima da câmera */
       #hud {
         position: absolute;
         top: 15px;
@@ -113,11 +112,11 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 16px;
-        height: 16px;
-        margin-top: -8px;
-        margin-left: -8px;
-        border: 2px solid rgba(255, 255, 255, 0.9);
+        width: 20px;
+        height: 20px;
+        margin-top: -10px;
+        margin-left: -10px;
+        border: 2px solid rgba(255, 255, 255, 0.8);
         border-radius: 50%;
         pointer-events: none;
         z-index: 400;
@@ -127,25 +126,12 @@
       #crosshair::after {
         content: '';
         position: absolute;
-        top: 6px;
-        left: 6px;
+        top: 8px;
+        left: 8px;
         width: 4px;
         height: 4px;
         background: white;
         border-radius: 50%;
-      }
-
-      #drag-hint {
-        position: absolute;
-        bottom: 30px;
-        width: 100%;
-        text-align: center;
-        color: rgba(255, 255, 255, 0.7);
-        font-size: 14px;
-        pointer-events: none;
-        z-index: 400;
-        display: none;
-        text-shadow: 1px 1px 2px #000;
       }
     </style>
   </head>
@@ -157,7 +143,7 @@
       <p>
         Vermelho = 10 pts<br>
         <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Arraste o dedo na tela para explorar os alvos em movimento no ambiente 360°!
+        Gire o celular em 360° para encontrar alvos espalhados no ambiente!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -175,12 +161,11 @@
     <div id="hud">
       <div>Pontos: <span id="score-val">0</span></div>
       <div id="timer-box">Tempo: <span id="timer-val">30</span>s</div>
-      <button class="btn btn-quit" onclick="returnToMenu()">Menu</button>
+      <button class="btn btn-quit" onclick="returnToMenu()">Sair / Menu</button>
     </div>
 
     <!-- Mira Central -->
     <div id="crosshair"></div>
-    <div id="drag-hint">Arraste para girar a câmera em 360°</div>
 
     <script>
       let camera, scene, renderer;
@@ -194,12 +179,7 @@
 
       let normalTexture, specialTexture;
 
-      let isDragging = false;
-      let previousMousePosition = { x: 0, y: 0 };
-      let lon = 0, lat = 0;
-      let phi = 0, theta = 0;
-      let clock = new THREE.Clock();
-
+      // Textura Vermelha
       function createNormalTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 256; canvas.height = 256;
@@ -214,6 +194,7 @@
         return new THREE.CanvasTexture(canvas);
       }
 
+      // Textura Azul/Preta (Alvo Especial)
       function createSpecialTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 256; canvas.height = 256;
@@ -230,13 +211,17 @@
 
       function initThreeJS() {
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0, 0);
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
+
+        // Ouve os sensores de rotação do Smartphone (Giroscópio 360°)
+        if (window.DeviceOrientationEvent) {
+          window.addEventListener('deviceorientation', onDeviceOrientation, false);
+        }
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(ambientLight);
@@ -244,6 +229,7 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
+        // Câmera Traseira Nativa
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -258,60 +244,32 @@
             video.style.zIndex = '-1';
             document.body.appendChild(video);
           })
-          .catch(err => console.warn("Câmera indisponível:", err));
+          .catch(err => {
+            console.warn("Permissão de câmera não concedida:", err);
+          });
 
         window.addEventListener('resize', onWindowResize);
-        
-        document.addEventListener('pointerdown', onPointerDown, { passive: false });
-        document.addEventListener('pointermove', onPointerMove, { passive: false });
-        document.addEventListener('pointerup', onPointerUp, { passive: false });
+        window.addEventListener('touchstart', onTouchStart, { passive: false });
+        window.addEventListener('click', onClick);
 
         animate();
       }
 
-      function onPointerDown(e) {
-        if (e.target.tagName === 'BUTTON') return;
-        isDragging = true;
-        previousMousePosition = { x: e.clientX, y: e.clientY };
-      }
-
-      function onPointerMove(e) {
-        if (!isDragging || !gameStarted) return;
-
-        const deltaX = e.clientX - previousMousePosition.x;
-        const deltaY = e.clientY - previousMousePosition.y;
-
-        lon -= deltaX * 0.3;
-        lat = Math.max(-85, Math.min(85, lat + deltaY * 0.3));
-
-        previousMousePosition = { x: e.clientX, y: e.clientY };
-      }
-
-      function onPointerUp(e) {
-        if (!isDragging) return;
-        isDragging = false;
-
-        const moveDist = Math.abs(e.clientX - previousMousePosition.x) + Math.abs(e.clientY - previousMousePosition.y);
-        if (moveDist < 5 && e.target.tagName !== 'BUTTON') {
-          checkShoot(e.clientX, e.clientY);
+      // Rotação da Câmera 3D via Giroscópio
+      function onDeviceOrientation(event) {
+        if (event.alpha !== null) {
+          const alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+          const beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
+          const gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+          
+          const euler = new THREE.Euler(beta, alpha, -gamma, 'YXZ');
+          camera.quaternion.setFromEuler(euler);
         }
-      }
-
-      function updateCameraRotation() {
-        phi = THREE.MathUtils.degToRad(90 - lat);
-        theta = THREE.MathUtils.degToRad(lon);
-
-        const target = new THREE.Vector3();
-        target.x = 500 * Math.sin(phi) * Math.cos(theta);
-        target.y = 500 * Math.cos(phi);
-        target.z = 500 * Math.sin(phi) * Math.sin(theta);
-
-        camera.lookAt(target);
       }
 
       function spawnTarget() {
         if (!gameStarted) return;
-        if (targets.length >= 6) return;
+        if (targets.length >= 5) return;
 
         const isSpecial = Math.random() < 0.35;
         const mat = new THREE.MeshBasicMaterial({
@@ -320,37 +278,30 @@
           side: THREE.DoubleSide
         });
 
-        const size = 1.2;
+        // Tamanho de 0.8m a 1.5m
+        const size = 0.8 + Math.random() * 0.7;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
-        mesh.userData = {
-          isSpecial: isSpecial,
-          hit: false,
-          randomOffset: Math.random() * 10 // Para desfasar o movimento de flutuação
-        };
+        mesh.userData = { isSpecial: isSpecial, hit: false };
 
-        const spawnLon = Math.random() * 360;
-        const spawnLat = (Math.random() - 0.5) * 40;
+        // DISTÂNCIA REAL: 6 a 10 metros de distância
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 6.0 + Math.random() * 4.0;
+        const height = (Math.random() - 0.5) * 4.0;
 
-        const pPhi = THREE.MathUtils.degToRad(90 - spawnLat);
-        const pTheta = THREE.MathUtils.degToRad(spawnLon);
-        const distance = 6.0 + Math.random() * 3.0;
-
-        const initialPos = new THREE.Vector3(
-          distance * Math.sin(pPhi) * Math.cos(pTheta),
-          distance * Math.cos(pPhi),
-          distance * Math.sin(pPhi) * Math.sin(pTheta)
+        mesh.position.set(
+          camera.position.x + Math.cos(angle) * distance,
+          camera.position.y + height,
+          camera.position.z + Math.sin(angle) * distance
         );
 
-        mesh.position.copy(initialPos);
-        mesh.userData.initialPosition = initialPos;
         mesh.lookAt(camera.position);
 
         scene.add(mesh);
         targets.push(mesh);
 
-        setTimeout(() => { removeTarget(mesh); }, 7500);
+        setTimeout(() => { removeTarget(mesh); }, 6500);
       }
 
       function removeTarget(mesh) {
@@ -387,25 +338,29 @@
         }
       }
 
+      function onTouchStart(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        if (e.touches.length > 0) {
+          checkShoot(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }
+
+      function onClick(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        checkShoot(e.clientX, e.clientY);
+      }
+
       function startGame(mode) {
         gameMode = mode;
         score = 0;
         timeLeft = 30;
         gameStarted = true;
-        lon = 0;
-        lat = 0;
 
         document.getElementById('start-layer').style.display = 'none';
         document.getElementById('game-over-layer').style.display = 'none';
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('crosshair').style.display = 'block';
-        document.getElementById('drag-hint').style.display = 'block';
         document.getElementById('score-val').innerText = score;
-
-        setTimeout(() => {
-          const hint = document.getElementById('drag-hint');
-          if (hint) hint.style.display = 'none';
-        }, 4000);
 
         [...targets].forEach(removeTarget);
 
@@ -424,7 +379,7 @@
 
         if (spawnInterval) clearInterval(spawnInterval);
         spawnTarget();
-        spawnInterval = setInterval(spawnTarget, 1800);
+        spawnInterval = setInterval(spawnTarget, 2000);
       }
 
       function endGame() {
@@ -435,7 +390,6 @@
 
         document.getElementById('hud').style.display = 'none';
         document.getElementById('crosshair').style.display = 'none';
-        document.getElementById('drag-hint').style.display = 'none';
         document.getElementById('final-score').innerText = score;
         document.getElementById('game-over-layer').style.display = 'flex';
       }
@@ -448,7 +402,6 @@
 
         document.getElementById('hud').style.display = 'none';
         document.getElementById('crosshair').style.display = 'none';
-        document.getElementById('drag-hint').style.display = 'none';
         document.getElementById('game-over-layer').style.display = 'none';
         document.getElementById('start-layer').style.display = 'flex';
       }
@@ -461,17 +414,6 @@
 
       function animate() {
         requestAnimationFrame(animate);
-
-        const elapsedTime = clock.getElapsedTime();
-
-        // Animação contínua de movimento/flutuação dos alvos para parecerem dinâmicos
-        targets.forEach(mesh => {
-          const offset = mesh.userData.randomOffset;
-          mesh.position.y = mesh.userData.initialPosition.y + Math.sin(elapsedTime * 2 + offset) * 0.4;
-          mesh.lookAt(camera.position);
-        });
-
-        updateCameraRotation();
         renderer.render(scene, camera);
       }
 
