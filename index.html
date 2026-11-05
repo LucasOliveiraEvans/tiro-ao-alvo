@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tiro ao Alvo - 360 Real</title>
+    <title>AR Tiro ao Alvo - 360 Padrão</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
       * {
@@ -141,9 +141,9 @@
     <div id="start-layer" class="ui-layer">
       <h1>Tiro ao Alvo AR</h1>
       <p>
-        Vermelho = 10 pts<br>
-        <b>Preto & Azul (Especial) = 20 pts</b><br><br>
-        Gire o celular em 360° para encontrar os alvos no ambiente 3D!
+        Alvos Normais = 10 pts<br>
+        <b>Alvos Pretos & Azuis (Especiais) = 20 pts</b><br><br>
+        Olhe ao redor em 360° para encontrar os alvos!
       </p>
       <button class="btn" onclick="startGame('arcade')">MODO ARCADE (30s)</button>
       <button class="btn btn-secondary" onclick="startGame('livre')">MODO LIVRE (Treino)</button>
@@ -217,7 +217,7 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Permissão para o giroscópio em dispositivos móveis
+        // Pedido de permissão para sensores de movimento do telemóvel
         window.addEventListener('click', () => {
           if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
             DeviceOrientationEvent.requestPermission().catch(() => {});
@@ -234,7 +234,7 @@
         normalTexture = createNormalTexture();
         specialTexture = createSpecialTexture();
 
-        // Ativação da câmara traseira
+        // Inicia a câmara traseira no fundo
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
           .then(stream => {
             const video = document.createElement('video');
@@ -280,27 +280,27 @@
           side: THREE.DoubleSide
         });
 
-        // Tamanho ideal de 1.2 metros (perfeito para parecer um alvo real posicionado no ambiente)
+        // Tamanho padrão original e confortável (1.2 metros)
         const size = 1.2;
         const geo = new THREE.PlaneGeometry(size, size);
         const mesh = new THREE.Mesh(geo, mat);
 
         mesh.userData = { isSpecial: isSpecial, hit: false };
 
-        // POSICIONAMENTO EM 360 GRAUS NO AMBIENTE:
-        // Distância intermédia de 5 a 8 metros ao redor da câmara
+        // Geração garantida em 360° ao redor da posição atual da câmara
         const angle = Math.random() * Math.PI * 2;
-        const distance = 5.0 + Math.random() * 3.0;
-        const height = (Math.random() - 0.5) * 2.5;
+        const distance = 4.0 + Math.random() * 2.5; // Distância padrão equilibrada
+        const height = (Math.random() - 0.5) * 2.0;
 
+        // Posiciona relativo à posição atual da câmara no mundo virtual
         mesh.position.set(
-          Math.cos(angle) * distance,
-          height,
-          Math.sin(angle) * distance
+          camera.position.x + Math.cos(angle) * distance,
+          camera.position.y + height,
+          camera.position.z + Math.sin(angle) * distance
         );
 
-        // Faz o alvo estar virado exatamente para o centro (onde está o utilizador)
-        mesh.lookAt(0, height, 0);
+        // Faz o alvo olhar sempre diretamente para a câmara
+        mesh.lookAt(camera.position);
 
         scene.add(mesh);
         targets.push(mesh);
