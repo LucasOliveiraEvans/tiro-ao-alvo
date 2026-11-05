@@ -58,7 +58,7 @@
         return canvas.toDataURL();
       }
 
-      // Componente para registrar o tiro / clique direto na entidade com geometria
+      // Componente para registrar o tiro / clique direto na entidade
       AFRAME.registerComponent('shootable', {
         init: function () {
           const el = this.el;
@@ -86,7 +86,7 @@
         }
       });
 
-      // Componente para gerenciar a criação de alvos (máximo 4 simultâneos)
+      // Componente para gerenciar a criação de alvos em 360 graus ao redor da câmara
       AFRAME.registerComponent('target-spawner', {
         init: function () {
           const sceneEl = this.el;
@@ -105,7 +105,10 @@
         },
 
         spawnTarget: function (sceneEl) {
-          // Criamos o plano com a geometria física, a textura e a classe do raycaster
+          // Obtém a posição atual da câmara para gerar os alvos ao redor do jogador em 360°
+          const cameraEl = document.querySelector('#main-camera');
+          const cameraPos = cameraEl ? cameraEl.getAttribute('position') : {x: 0, y: 1.6, z: 0};
+
           const targetDisc = document.createElement('a-plane');
           targetDisc.setAttribute('class', 'target');
           targetDisc.setAttribute('shootable', '');
@@ -113,12 +116,18 @@
           targetDisc.setAttribute('height', '1');
           targetDisc.setAttribute('material', `src: url(${this.targetTextureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Posições aleatórias ao redor do jogador
-          const x = (Math.random() - 0.5) * 4;
-          const y = Math.random() * 1.5 + 1;
-          const z = -Math.random() * 2 - 2;
+          // Gera coordenadas em 360 graus (ângulo aleatório completo de 0 a 2*PI)
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 2.5 + Math.random() * 2; // Distância entre 2.5m e 4.5m do jogador
+          
+          const x = cameraPos.x + Math.cos(angle) * distance;
+          const y = cameraPos.y + (Math.random() - 0.5) * 1.2; // Variação de altura ao redor dos olhos
+          const z = cameraPos.z + Math.sin(angle) * distance;
 
           targetDisc.setAttribute('position', `${x} ${y} ${z}`);
+
+          // Faz o alvo olhar sempre para a câmara do utilizador
+          targetDisc.setAttribute('look-at', '#main-camera');
 
           // Animação de escala de entrada
           targetDisc.setAttribute('animation', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 300');
@@ -145,8 +154,8 @@
 
     <!-- Cena A-Frame -->
     <a-scene target-spawner background="color: #222">
-      <!-- Câmera com cursor centralizado / raycaster mapeado direto para os alvos -->
-      <a-entity camera position="0 1.6 0" look-controls>
+      <!-- Câmera com ID fixo para rastreamento de posição em 360 graus -->
+      <a-entity camera position="0 1.6 0" look-controls id="main-camera">
         <a-entity cursor="rayOrigin: mouse"
                   raycaster="objects: .target"
                   position="0 0 -1"
