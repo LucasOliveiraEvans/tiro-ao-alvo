@@ -3,14 +3,15 @@
   <head>
     <meta charset="utf-8">
     <title>AR Tiro ao Alvo</title>
-    <!-- Importando A-Frame -->
+    <!-- Importando A-Frame e AR.js para acesso automático à câmera traseira -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
       body {
         margin: 0;
         overflow: hidden;
       }
-      /* Estilo para o placar e interface (HUD) */
+      /* Interface do placar (HUD) */
       #hud {
         position: absolute;
         top: 20px;
@@ -20,7 +21,7 @@
         font-size: 24px;
         font-weight: bold;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-        z-index: 9999;
+        z-index: 99999;
         pointer-events: none;
         user-select: none;
       }
@@ -28,28 +29,26 @@
     <script>
       let score = 0;
 
-      // Cria a textura procedural do alvo clássico (círculos concêntricos)
+      // Gera a textura do alvo clássico concêntrico
       function createTargetTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        const centerX = 256;
-        const centerY = 256;
 
         ctx.clearRect(0, 0, 512, 512);
 
         const rings = [
-          { r: 250, color: '#E50914' }, // Borda externa vermelha
-          { r: 200, color: '#FFFFFF' }, // Anel branco
-          { r: 150, color: '#E50914' }, // Anel vermelho
-          { r: 100, color: '#FFFFFF' }, // Anel branco
-          { r: 50,  color: '#E50914' }  // Centro vermelho
+          { r: 250, color: '#E50914' },
+          { r: 200, color: '#FFFFFF' },
+          { r: 150, color: '#E50914' },
+          { r: 100, color: '#FFFFFF' },
+          { r: 50,  color: '#E50914' }
         ];
 
         rings.forEach(ring => {
           ctx.beginPath();
-          ctx.arc(centerX, centerY, ring.r, 0, 2 * Math.PI, false);
+          ctx.arc(256, 256, ring.r, 0, 2 * Math.PI, false);
           ctx.fillStyle = ring.color;
           ctx.fill();
         });
@@ -57,22 +56,20 @@
         return canvas.toDataURL();
       }
 
-      // Componente para registrar o tiro / clique e toque em modo AR e 3D
+      // Componente de acerto (Funciona com toque de dedo e clique)
       AFRAME.registerComponent('shootable', {
         init: function () {
           const el = this.el;
           
-          const hitHandler = (evt) => {
-            if (evt) evt.stopPropagation();
-            
+          const destroyTarget = () => {
             if (el.dataset.hit) return;
             el.dataset.hit = "true";
 
             score += 10;
-            const hudScore = document.getElementById('score-val');
-            if (hudScore) hudScore.innerText = score;
+            const hud = document.getElementById('score-val');
+            if (hud) hud.innerText = score;
             
-            // Animação de acerto (encolher rapidamente)
+            // Animação de acerto
             el.setAttribute('animation__hit', 'property: scale; to: 0 0 0; dur: 150');
             setTimeout(() => {
               if (el.parentNode) {
@@ -81,21 +78,23 @@
             }, 150);
           };
 
-          // Eventos para clique padrão de PC, toque comum e toque nativo do WebXR AR
-          el.addEventListener('click', hitHandler);
-          el.addEventListener('mousedown', hitHandler);
-          el.addEventListener('touchstart', hitHandler);
-          el.addEventListener('select', hitHandler); // Essencial para o botão de AR no celular
+          // Registra o evento de toque/clique de forma universal
+          el.addEventListener('click', destroyTarget);
+          el.addEventListener('mousedown', destroyTarget);
+          el.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            destroyTarget();
+          });
         }
       });
 
-      // Componente para gerenciar a criação de alvos em 360 graus em volta da câmera
+      // Gerenciador de alvos 360° em volta da câmera
       AFRAME.registerComponent('target-spawner', {
         init: function () {
           const sceneEl = this.el;
           this.targetTextureUrl = createTargetTexture();
 
-          // Intervalo de 2.5 segundos
+          // Inicia a geração a cada 2.5 segundos
           this.timer = setInterval(() => {
             const currentTargets = document.querySelectorAll('.target');
             if (currentTargets.length < 4) {
@@ -103,16 +102,14 @@
             }
           }, 2500);
           
-          // Cria o primeiro alvo imediatamente
           this.spawnTarget(sceneEl);
         },
 
         spawnTarget: function (sceneEl) {
           const cameraEl = document.querySelector('#main-camera');
           
-          // Pega a posição global real do jogador em 3D ou AR
           let cameraPos = { x: 0, y: 1.6, z: 0 };
-          if (cameraEl) {
+          if (cameraEl && cameraEl.object3D) {
             const worldPos = new THREE.Vector3();
             cameraEl.object3D.getWorldPosition(worldPos);
             cameraPos = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
@@ -125,31 +122,29 @@
           targetDisc.setAttribute('height', '1.2');
           targetDisc.setAttribute('material', `src: url(${this.targetTextureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Coordenadas polares em 360 graus em relação à posição da câmera
+          // Posições polares 360° (distância entre 2m e 4m do usuário)
           const angle = Math.random() * Math.PI * 2;
           const distance = 2.0 + Math.random() * 2.0;
           
           const x = cameraPos.x + Math.cos(angle) * distance;
-          const y = cameraPos.y + (Math.random() - 0.5) * 1.0;
+          const y = cameraPos.y + (Math.random() - 0.5) * 1.5;
           const z = cameraPos.z + Math.sin(angle) * distance;
 
           targetDisc.setAttribute('position', `${x} ${y} ${z}`);
-          
-          // Animação de entrada
           targetDisc.setAttribute('animation', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 300');
 
           sceneEl.appendChild(targetDisc);
 
-          // Garante que o alvo fique virado para a câmera após entrar na cena
+          // Orienta o alvo para a câmera
           setTimeout(() => {
-            if (targetDisc.object3D && cameraEl) {
-              const camWorldPos = new THREE.Vector3();
-              cameraEl.object3D.getWorldPosition(camWorldPos);
-              targetDisc.object3D.lookAt(camWorldPos);
+            if (targetDisc.object3D && cameraEl && cameraEl.object3D) {
+              const camPos = new THREE.Vector3();
+              cameraEl.object3D.getWorldPosition(camPos);
+              targetDisc.object3D.lookAt(camPos);
             }
           }, 50);
 
-          // Remove automaticamente após 6 segundos se não for atingido
+          // Expira após 6 segundos
           setTimeout(() => {
             if (targetDisc.parentNode) {
               targetDisc.parentNode.removeChild(targetDisc);
@@ -163,28 +158,22 @@
       });
     </script>
   </head>
-  <body>
-    <!-- Placar na tela (HUD) -->
+  <body style="margin : 0px; overflow: hidden;">
+    <!-- Placar (HUD) -->
     <div id="hud">Pontos: <span id="score-val">0</span></div>
 
-    <!-- Cena com suporte nativo a WebXR AR (Câmera do Celular + Toque) -->
-    <a-scene target-spawner webxr="optionalFeatures: hit-test, local-floor;" ar-mode-ui="enabled: true">
+    <!-- Cena com câmera ativada automaticamente via AR.js -->
+    <a-scene target-spawner embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
       
-      <!-- Rig da Câmera -->
-      <a-entity id="camera-rig" position="0 0 0">
-        <a-entity camera look-controls position="0 1.6 0" id="main-camera">
-          <!-- Cursor otimizado tanto para mouse quanto para toque em tela cheia e AR -->
-          <a-entity cursor="rayOrigin: mouse; fuse: false"
-                    raycaster="objects: .target; interval: 50"
-                    position="0 0 -1"
-                    geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
-                    material="color: white; shader: flat">
-          </a-entity>
+      <!-- Câmera AR com sistema de clique por toque de tela -->
+      <a-entity camera look-controls id="main-camera">
+        <a-entity cursor="rayOrigin: mouse; fuse: false"
+                  raycaster="objects: .target; interval: 50"
+                  position="0 0 -1"
+                  geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
+                  material="color: white; shader: flat">
         </a-entity>
       </a-entity>
 
-      <!-- Luz ambiente -->
       <a-light type="ambient" color="#FFF"></a-light>
     </a-scene>
-  </body>
-</html>
