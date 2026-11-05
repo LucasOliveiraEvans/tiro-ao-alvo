@@ -10,24 +10,76 @@
       body {
         margin: 0;
         overflow: hidden;
+        font-family: Arial, sans-serif;
       }
+
+      /* Tela de Menu Inicial */
+      #start-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 999999;
+        color: white;
+        text-align: center;
+      }
+
+      #start-screen h1 {
+        font-size: 32px;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+      }
+
+      #start-screen p {
+        font-size: 16px;
+        margin-bottom: 30px;
+        color: #ccc;
+        max-width: 80%;
+      }
+
+      #start-btn {
+        padding: 15px 40px;
+        font-size: 20px;
+        font-weight: bold;
+        color: white;
+        background-color: #E50914;
+        border: none;
+        border-radius: 30px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+        transition: transform 0.2s, background-color 0.2s;
+      }
+
+      #start-btn:active {
+        transform: scale(0.95);
+        background-color: #b80710;
+      }
+
       /* Interface do placar (HUD) */
       #hud {
         position: absolute;
         top: 20px;
         left: 20px;
         color: white;
-        font-family: Arial, sans-serif;
         font-size: 24px;
         font-weight: bold;
         text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         z-index: 99999;
         pointer-events: none;
         user-select: none;
+        display: none; /* Escondido até iniciar */
       }
     </style>
     <script>
       let score = 0;
+      let gameStarted = false;
 
       // Gera a textura do alvo clássico concêntrico
       function createTargetTexture() {
@@ -58,7 +110,7 @@
 
       // Função global para destruir o alvo ao ser atingido
       function hitTarget(el) {
-        if (el.dataset.hit) return;
+        if (!gameStarted || el.dataset.hit) return;
         el.dataset.hit = "true";
 
         score += 10;
@@ -86,71 +138,75 @@
         }
       });
 
-      // Gerenciador de cliques globais na tela para contornar a camada de vídeo da câmara
+      // Gerenciador de toques/cliques na tela
       AFRAME.registerComponent('screen-tap-handler', {
         init: function () {
           const sceneEl = this.el;
           
+          const handleTap = (clientX, clientY) => {
+            if (!gameStarted) return;
+
+            const cameraEl = sceneEl.camera;
+            if (!cameraEl) return;
+
+            const mouse = new THREE.Vector2();
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, cameraEl);
+
+            const targetEls = document.querySelectorAll('.target');
+            const targetObjects = Array.from(targetEls).map(el => el.object3D);
+
+            const intersects = raycaster.intersectObjects(targetObjects, true);
+
+            if (intersects.length > 0) {
+              let obj = intersects[0].object;
+              while (obj && !obj.el && obj.parent) {
+                obj = obj.parent;
+              }
+              if (obj && obj.el) {
+                hitTarget(obj.el);
+              }
+            }
+          };
+
           window.addEventListener('click', (evt) => {
-            this.checkIntersection(evt.clientX, evt.clientY, sceneEl);
+            handleTap(evt.clientX, evt.clientY);
           });
 
           window.addEventListener('touchend', (evt) => {
             if (evt.changedTouches.length > 0) {
               const touch = evt.changedTouches[0];
-              this.checkIntersection(touch.clientX, touch.clientY, sceneEl);
+              handleTap(touch.clientX, touch.clientY);
             }
           });
-        },
-
-        checkIntersection: function (clientX, clientY, sceneEl) {
-          const cameraEl = sceneEl.camera;
-          if (!cameraEl) return;
-
-          // Converte o toque da tela para coordenadas normalizadas (-1 a 1)
-          const mouse = new THREE.Vector2();
-          mouse.x = (clientX / window.innerWidth) * 2 - 1;
-          mouse.y = -(clientY / window.innerHeight) * 2 + 1;
-
-          const raycaster = new THREE.Raycaster();
-          raycaster.setFromCamera(mouse, cameraEl);
-
-          // Procura todos os alvos ativos na cena
-          const targetEls = document.querySelectorAll('.target');
-          const targetObjects = Array.from(targetEls).map(el => el.object3D);
-
-          const intersects = raycaster.intersectObjects(targetObjects, true);
-
-          if (intersects.length > 0) {
-            // Acha a entidade A-Frame correspondente ao objeto 3D atingido
-            let obj = intersects[0].object;
-            while (obj && !obj.el && obj.parent) {
-              obj = obj.parent;
-            }
-            if (obj && obj.el) {
-              hitTarget(obj.el);
-            }
-          }
         }
       });
 
-      // Gerenciador de alvos 360° em volta da câmera
+      // Gerenciador de alvos (Só roda após clicar em Iniciar)
       AFRAME.registerComponent('target-spawner', {
         init: function () {
-          const sceneEl = this.el;
+          this.sceneEl = this.el;
           this.targetTextureUrl = createTargetTexture();
-
-          this.timer = setInterval(() => {
-            const currentTargets = document.querySelectorAll('.target');
-            if (currentTargets.length < 4) {
-              this.spawnTarget(sceneEl);
-            }
-          }, 2500);
-          
-          this.spawnTarget(sceneEl);
         },
 
-        spawnTarget: function (sceneEl) {
+        startSpawning: function () {
+          // Cria o primeiro alvo
+          this.spawnTarget();
+
+          // Cria novos alvos a cada 2.5s
+          this.timer = setInterval(() => {
+            if (!gameStarted) return;
+            const currentTargets = document.querySelectorAll('.target');
+            if (currentTargets.length < 4) {
+              this.spawnTarget();
+            }
+          }, 2500);
+        },
+
+        spawnTarget: function () {
           const cameraEl = document.querySelector('#main-camera');
           
           let cameraPos = { x: 0, y: 1.6, z: 0 };
@@ -167,7 +223,7 @@
           targetDisc.setAttribute('height', '1.2');
           targetDisc.setAttribute('material', `src: url(${this.targetTextureUrl}); transparent: true; side: double; shader: flat`);
 
-          // Posições polares 360°
+          // Posições 360° em volta da câmera
           const angle = Math.random() * Math.PI * 2;
           const distance = 2.0 + Math.random() * 2.0;
           
@@ -178,7 +234,7 @@
           targetDisc.setAttribute('position', `${x} ${y} ${z}`);
           targetDisc.setAttribute('animation', 'property: scale; from: 0 0 0; to: 1 1 1; dur: 300');
 
-          sceneEl.appendChild(targetDisc);
+          this.sceneEl.appendChild(targetDisc);
 
           setTimeout(() => {
             if (targetDisc.object3D && cameraEl && cameraEl.object3D) {
@@ -193,23 +249,39 @@
               targetDisc.parentNode.removeChild(targetDisc);
             }
           }, 6000);
-        },
-
-        remove: function () {
-          clearInterval(this.timer);
         }
       });
+
+      // Função chamada ao clicar no botão "Iniciar"
+      function startGame() {
+        gameStarted = true;
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('hud').style.display = 'block';
+
+        // Inicia a criação dos alvos
+        const scene = document.querySelector('a-scene');
+        if (scene && scene.components['target-spawner']) {
+          scene.components['target-spawner'].startSpawning();
+        }
+      }
     </script>
   </head>
-  <body style="margin : 0px; overflow: hidden;">
+  <body style="margin: 0px; overflow: hidden;">
+    
+    <!-- Menu Inicial -->
+    <div id="start-screen">
+      <h1>Jogo de Tiro AR</h1>
+      <p>Gire o celular em 360° para encontrar os alvos e toque neles para pontuar!</p>
+      <button id="start-btn" onclick="startGame()">INICIAR JOGO</button>
+    </div>
+
     <!-- Placar (HUD) -->
     <div id="hud">Pontos: <span id="score-val">0</span></div>
 
-    <!-- Cena com AR.js, spawner e manipulador global de toque na tela -->
+    <!-- Cena A-Frame com AR.js -->
     <a-scene target-spawner screen-tap-handler embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
       
       <a-entity camera look-controls id="main-camera">
-        <!-- Mira central opcional -->
         <a-entity position="0 0 -1"
                   geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
                   material="color: white; shader: flat">
@@ -218,5 +290,6 @@
 
       <a-light type="ambient" color="#FFF"></a-light>
     </a-scene>
+
   </body>
 </html>
